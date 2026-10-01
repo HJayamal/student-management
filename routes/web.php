@@ -1,19 +1,26 @@
 <?php
 
-use App\Http\Controllers\AdminController;
+use App\Http\Controllers\StudentController;
 use Illuminate\Support\Facades\Route;
 
-Route::get('/', [AdminController::class, 'dashboard'])
-    ->name('admin.dashboard');
+/*
+|--------------------------------------------------------------------------
+| Web Routes
+|--------------------------------------------------------------------------
+*/
 
-Route::get('/about', function () {
-    return view('about');
-})->name('about');
+// Home page
+Route::get('/', [StudentController::class, 'index'])
+    ->name('home');
 
-Route::get('/contact', function () {
-    return view('contact');
-})->name('contact');
+// Student CRUD routes
+Route::resource('students', StudentController::class)
+    ->except(['show']);
 
-Route::get('/login', function () {
-    return view('login');
-})->name('login');
+// About Us
+Route::view('/about', 'about')
+    ->name('about');
+
+// Contact Us
+Route::view('/contact', 'contact')
+    ->name('contact');
