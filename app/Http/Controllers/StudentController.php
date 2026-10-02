@@ -7,10 +7,14 @@ use Illuminate\Http\Request;
 
 class StudentController extends Controller
 {
-    // Display student list
-    public function index()
+    public function index(Request $request)
     {
-        $students = Student::all();
+        $search = $request->search;
+
+        $students = Student::when($search, function ($query) use ($search) {
+            $query->where('reg_no', 'like', "%$search%")
+                ->orWhere('name', 'like', "%$search%");
+        })->get();
 
         return view('students.index', compact('students'));
     }

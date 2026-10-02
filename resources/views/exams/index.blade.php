@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Students')
+@section('title', 'Exams')
 
 @section('content')
 
@@ -8,13 +8,13 @@
 
         <div class="row">
 
-            <!-- Student Register -->
+            <!-- Add Exam -->
             <div class="col-md-5">
 
                 <div class="card">
 
                     <div class="card-header bg-success text-white">
-                        <h3 class="card-title">Student Register</h3>
+                        <h3 class="card-title">Add Exam</h3>
                     </div>
 
                     <div class="card-body">
@@ -33,91 +33,83 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('students.store') }}" method="POST">
+                        <form action="{{ route('exams.store') }}" method="POST">
 
                             @csrf
 
                             <div class="mb-3">
-                                <label class="form-label">Register No</label>
+                                <label class="form-label">Exam Name</label>
 
                                 <input
                                     type="text"
-                                    name="reg_no"
+                                    name="exam_name"
                                     class="form-control"
+                                    placeholder="Mid Term Exam"
                                     required
                                 >
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Full Name</label>
+                                <label class="form-label">Subject</label>
 
                                 <input
                                     type="text"
-                                    name="name"
+                                    name="subject"
                                     class="form-control"
+                                    placeholder="Software Engineering"
                                     required
                                 >
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Email</label>
-
-                                <input
-                                    type="email"
-                                    name="email"
-                                    class="form-control"
-                                    required
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Phone No</label>
-
-                                <input
-                                    type="text"
-                                    name="phone"
-                                    class="form-control"
-                                    required
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Date of Birth</label>
+                                <label class="form-label">Exam Date</label>
 
                                 <input
                                     type="date"
-                                    name="dob"
+                                    name="exam_date"
                                     class="form-control"
                                     required
                                 >
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Password</label>
+                                <label class="form-label">Duration</label>
 
                                 <input
-                                    type="password"
-                                    name="password"
+                                    type="text"
+                                    name="duration"
                                     class="form-control"
+                                    placeholder="2 Hours"
                                     required
                                 >
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Address</label>
+                                <label class="form-label">Status</label>
 
-                                <textarea
-                                    name="address"
-                                    class="form-control"
-                                    rows="3"
-                                    required
-                                ></textarea>
+                                <select
+                                    name="status"
+                                    class="form-select"
+                                    required>
+
+                                    <option value="Scheduled">
+                                        Scheduled
+                                    </option>
+
+                                    <option value="Completed">
+                                        Completed
+                                    </option>
+
+                                </select>
+
                             </div>
 
                             <button
                                 type="submit"
                                 class="btn btn-success w-100">
-                                Register
+
+                                Add Exam
+
                             </button>
 
                         </form>
@@ -129,57 +121,29 @@
             </div>
 
 
-            <!-- Student List -->
+            <!-- Exam List -->
             <div class="col-md-7">
 
                 <div class="card">
 
                     <div class="card-header bg-primary text-white">
-                        <h3 class="card-title">Student List</h3>
+                        <h3 class="card-title">Exam List</h3>
                     </div>
 
                     <div class="card-body">
 
-                        <!-- Search -->
-                        <form
-                            action="{{ route('students.index') }}"
-                            method="GET"
-                            class="mb-3">
-
-                            <div class="input-group">
-
-                                <input
-                                    type="text"
-                                    name="search"
-                                    value="{{ request('search') }}"
-                                    class="form-control"
-                                    placeholder="Search by Register No or Name"
-                                >
-
-                                <button
-                                    type="submit"
-                                    class="btn btn-primary">
-                                    Search
-                                </button>
-
-                            </div>
-
-                        </form>
-
-
-                        <!-- Student Table -->
                         <div class="table-responsive">
 
                             <table class="table table-bordered table-striped">
 
-                                <thead class="table-light">
+                                <thead>
 
                                 <tr>
-                                    <th>Reg No</th>
-                                    <th>Name</th>
-                                    <th>DOB</th>
-                                    <th>Email</th>
-                                    <th>Phone</th>
+                                    <th>Exam</th>
+                                    <th>Subject</th>
+                                    <th>Date</th>
+                                    <th>Duration</th>
+                                    <th>Status</th>
                                     <th>Action</th>
                                 </tr>
 
@@ -187,40 +151,40 @@
 
                                 <tbody>
 
-                                @forelse($students as $student)
+                                @forelse($exams as $exam)
 
                                     <tr>
 
                                         <td>
-                                            {{ $student->reg_no }}
+                                            {{ $exam->exam_name }}
                                         </td>
 
                                         <td>
-                                            {{ $student->name }}
+                                            {{ $exam->subject }}
                                         </td>
 
                                         <td>
-                                            {{ $student->dob }}
+                                            {{ $exam->exam_date }}
                                         </td>
 
                                         <td>
-                                            {{ $student->email }}
+                                            {{ $exam->duration }}
                                         </td>
 
                                         <td>
-                                            {{ $student->phone }}
+                                            {{ $exam->status }}
                                         </td>
 
                                         <td>
 
                                             <a
-                                                href="{{ route('students.edit', $student) }}"
+                                                href="{{ route('exams.edit', $exam) }}"
                                                 class="btn btn-warning btn-sm">
                                                 Update
                                             </a>
 
                                             <form
-                                                action="{{ route('students.destroy', $student) }}"
+                                                action="{{ route('exams.destroy', $exam) }}"
                                                 method="POST"
                                                 style="display:inline;">
 
@@ -230,8 +194,10 @@
                                                 <button
                                                     type="submit"
                                                     class="btn btn-danger btn-sm"
-                                                    onclick="return confirm('Delete this student?')">
+                                                    onclick="return confirm('Delete this exam?')">
+
                                                     Delete
+
                                                 </button>
 
                                             </form>
@@ -244,10 +210,11 @@
 
                                     <tr>
 
-                                        <td
-                                            colspan="6"
+                                        <td colspan="6"
                                             class="text-center">
-                                            No students found.
+
+                                            No exams found.
+
                                         </td>
 
                                     </tr>

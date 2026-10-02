@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Students')
+@section('title', 'Admissions')
 
 @section('content')
 
@@ -8,13 +8,13 @@
 
         <div class="row">
 
-            <!-- Student Register -->
+            <!-- Admission Form -->
             <div class="col-md-5">
 
                 <div class="card">
 
                     <div class="card-header bg-success text-white">
-                        <h3 class="card-title">Student Register</h3>
+                        <h3 class="card-title">Student Admission</h3>
                     </div>
 
                     <div class="card-body">
@@ -33,13 +33,22 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('students.store') }}" method="POST">
+                        <form action="{{ route('admissions.store') }}" method="POST">
 
                             @csrf
 
                             <div class="mb-3">
-                                <label class="form-label">Register No</label>
+                                <label class="form-label">Admission No</label>
+                                <input
+                                    type="text"
+                                    name="admission_no"
+                                    class="form-control"
+                                    required
+                                >
+                            </div>
 
+                            <div class="mb-3">
+                                <label class="form-label">Student Reg No</label>
                                 <input
                                     type="text"
                                     name="reg_no"
@@ -49,75 +58,47 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Full Name</label>
-
+                                <label class="form-label">Course</label>
                                 <input
                                     type="text"
-                                    name="name"
+                                    name="course"
                                     class="form-control"
+                                    placeholder="Example: Software Engineering"
                                     required
                                 >
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Email</label>
-
-                                <input
-                                    type="email"
-                                    name="email"
-                                    class="form-control"
-                                    required
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Phone No</label>
-
-                                <input
-                                    type="text"
-                                    name="phone"
-                                    class="form-control"
-                                    required
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Date of Birth</label>
-
+                                <label class="form-label">Admission Date</label>
                                 <input
                                     type="date"
-                                    name="dob"
+                                    name="admission_date"
                                     class="form-control"
                                     required
                                 >
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Password</label>
+                                <label class="form-label">Status</label>
 
-                                <input
-                                    type="password"
-                                    name="password"
-                                    class="form-control"
-                                    required
-                                >
-                            </div>
+                                <select
+                                    name="status"
+                                    class="form-select"
+                                    required>
 
-                            <div class="mb-3">
-                                <label class="form-label">Address</label>
+                                    <option value="Active">Active</option>
+                                    <option value="Inactive">Inactive</option>
 
-                                <textarea
-                                    name="address"
-                                    class="form-control"
-                                    rows="3"
-                                    required
-                                ></textarea>
+                                </select>
+
                             </div>
 
                             <button
                                 type="submit"
                                 class="btn btn-success w-100">
-                                Register
+
+                                Add Admission
+
                             </button>
 
                         </form>
@@ -129,57 +110,29 @@
             </div>
 
 
-            <!-- Student List -->
+            <!-- Admission List -->
             <div class="col-md-7">
 
                 <div class="card">
 
                     <div class="card-header bg-primary text-white">
-                        <h3 class="card-title">Student List</h3>
+                        <h3 class="card-title">Admission List</h3>
                     </div>
 
                     <div class="card-body">
 
-                        <!-- Search -->
-                        <form
-                            action="{{ route('students.index') }}"
-                            method="GET"
-                            class="mb-3">
-
-                            <div class="input-group">
-
-                                <input
-                                    type="text"
-                                    name="search"
-                                    value="{{ request('search') }}"
-                                    class="form-control"
-                                    placeholder="Search by Register No or Name"
-                                >
-
-                                <button
-                                    type="submit"
-                                    class="btn btn-primary">
-                                    Search
-                                </button>
-
-                            </div>
-
-                        </form>
-
-
-                        <!-- Student Table -->
                         <div class="table-responsive">
 
                             <table class="table table-bordered table-striped">
 
-                                <thead class="table-light">
+                                <thead>
 
                                 <tr>
+                                    <th>Admission No</th>
                                     <th>Reg No</th>
-                                    <th>Name</th>
-                                    <th>DOB</th>
-                                    <th>Email</th>
-                                    <th>Phone</th>
+                                    <th>Course</th>
+                                    <th>Date</th>
+                                    <th>Status</th>
                                     <th>Action</th>
                                 </tr>
 
@@ -187,40 +140,42 @@
 
                                 <tbody>
 
-                                @forelse($students as $student)
+                                @forelse($admissions as $admission)
 
                                     <tr>
 
                                         <td>
-                                            {{ $student->reg_no }}
+                                            {{ $admission->admission_no }}
                                         </td>
 
                                         <td>
-                                            {{ $student->name }}
+                                            {{ $admission->reg_no }}
                                         </td>
 
                                         <td>
-                                            {{ $student->dob }}
+                                            {{ $admission->course }}
                                         </td>
 
                                         <td>
-                                            {{ $student->email }}
+                                            {{ $admission->admission_date }}
                                         </td>
 
                                         <td>
-                                            {{ $student->phone }}
+                                            {{ $admission->status }}
                                         </td>
 
                                         <td>
 
                                             <a
-                                                href="{{ route('students.edit', $student) }}"
+                                                href="{{ route('admissions.edit', $admission) }}"
                                                 class="btn btn-warning btn-sm">
+
                                                 Update
+
                                             </a>
 
                                             <form
-                                                action="{{ route('students.destroy', $student) }}"
+                                                action="{{ route('admissions.destroy', $admission) }}"
                                                 method="POST"
                                                 style="display:inline;">
 
@@ -230,8 +185,10 @@
                                                 <button
                                                     type="submit"
                                                     class="btn btn-danger btn-sm"
-                                                    onclick="return confirm('Delete this student?')">
+                                                    onclick="return confirm('Delete this admission?')">
+
                                                     Delete
+
                                                 </button>
 
                                             </form>
@@ -244,10 +201,10 @@
 
                                     <tr>
 
-                                        <td
-                                            colspan="6"
-                                            class="text-center">
-                                            No students found.
+                                        <td colspan="6" class="text-center">
+
+                                            No admissions found.
+
                                         </td>
 
                                     </tr>

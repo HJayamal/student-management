@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Students')
+@section('title', 'Teachers')
 
 @section('content')
 
@@ -8,13 +8,13 @@
 
         <div class="row">
 
-            <!-- Student Register -->
+            <!-- Teacher Form -->
             <div class="col-md-5">
 
                 <div class="card">
 
                     <div class="card-header bg-success text-white">
-                        <h3 class="card-title">Student Register</h3>
+                        <h3 class="card-title">Add Teacher</h3>
                     </div>
 
                     <div class="card-body">
@@ -33,23 +33,12 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('students.store') }}" method="POST">
+                        <form action="{{ route('teachers.store') }}" method="POST">
 
                             @csrf
 
                             <div class="mb-3">
-                                <label class="form-label">Register No</label>
-
-                                <input
-                                    type="text"
-                                    name="reg_no"
-                                    class="form-control"
-                                    required
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Full Name</label>
+                                <label class="form-label">Name</label>
 
                                 <input
                                     type="text"
@@ -71,7 +60,7 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Phone No</label>
+                                <label class="form-label">Phone</label>
 
                                 <input
                                     type="text"
@@ -82,22 +71,11 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Date of Birth</label>
+                                <label class="form-label">Subject</label>
 
                                 <input
-                                    type="date"
-                                    name="dob"
-                                    class="form-control"
-                                    required
-                                >
-                            </div>
-
-                            <div class="mb-3">
-                                <label class="form-label">Password</label>
-
-                                <input
-                                    type="password"
-                                    name="password"
+                                    type="text"
+                                    name="subject"
                                     class="form-control"
                                     required
                                 >
@@ -117,7 +95,7 @@
                             <button
                                 type="submit"
                                 class="btn btn-success w-100">
-                                Register
+                                Add Teacher
                             </button>
 
                         </form>
@@ -129,57 +107,28 @@
             </div>
 
 
-            <!-- Student List -->
+            <!-- Teacher List -->
             <div class="col-md-7">
 
                 <div class="card">
 
                     <div class="card-header bg-primary text-white">
-                        <h3 class="card-title">Student List</h3>
+                        <h3 class="card-title">Teacher List</h3>
                     </div>
 
                     <div class="card-body">
 
-                        <!-- Search -->
-                        <form
-                            action="{{ route('students.index') }}"
-                            method="GET"
-                            class="mb-3">
-
-                            <div class="input-group">
-
-                                <input
-                                    type="text"
-                                    name="search"
-                                    value="{{ request('search') }}"
-                                    class="form-control"
-                                    placeholder="Search by Register No or Name"
-                                >
-
-                                <button
-                                    type="submit"
-                                    class="btn btn-primary">
-                                    Search
-                                </button>
-
-                            </div>
-
-                        </form>
-
-
-                        <!-- Student Table -->
                         <div class="table-responsive">
 
                             <table class="table table-bordered table-striped">
 
-                                <thead class="table-light">
+                                <thead>
 
                                 <tr>
-                                    <th>Reg No</th>
                                     <th>Name</th>
-                                    <th>DOB</th>
                                     <th>Email</th>
                                     <th>Phone</th>
+                                    <th>Subject</th>
                                     <th>Action</th>
                                 </tr>
 
@@ -187,40 +136,28 @@
 
                                 <tbody>
 
-                                @forelse($students as $student)
+                                @forelse($teachers as $teacher)
 
                                     <tr>
 
-                                        <td>
-                                            {{ $student->reg_no }}
-                                        </td>
+                                        <td>{{ $teacher->name }}</td>
 
-                                        <td>
-                                            {{ $student->name }}
-                                        </td>
+                                        <td>{{ $teacher->email }}</td>
 
-                                        <td>
-                                            {{ $student->dob }}
-                                        </td>
+                                        <td>{{ $teacher->phone }}</td>
 
-                                        <td>
-                                            {{ $student->email }}
-                                        </td>
-
-                                        <td>
-                                            {{ $student->phone }}
-                                        </td>
+                                        <td>{{ $teacher->subject }}</td>
 
                                         <td>
 
                                             <a
-                                                href="{{ route('students.edit', $student) }}"
+                                                href="{{ route('teachers.edit', $teacher) }}"
                                                 class="btn btn-warning btn-sm">
                                                 Update
                                             </a>
 
                                             <form
-                                                action="{{ route('students.destroy', $student) }}"
+                                                action="{{ route('teachers.destroy', $teacher) }}"
                                                 method="POST"
                                                 style="display:inline;">
 
@@ -230,7 +167,7 @@
                                                 <button
                                                     type="submit"
                                                     class="btn btn-danger btn-sm"
-                                                    onclick="return confirm('Delete this student?')">
+                                                    onclick="return confirm('Delete this teacher?')">
                                                     Delete
                                                 </button>
 
@@ -243,13 +180,9 @@
                                 @empty
 
                                     <tr>
-
-                                        <td
-                                            colspan="6"
-                                            class="text-center">
-                                            No students found.
+                                        <td colspan="5" class="text-center">
+                                            No teachers found.
                                         </td>
-
                                     </tr>
 
                                 @endforelse
