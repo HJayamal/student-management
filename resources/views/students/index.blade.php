@@ -33,97 +33,87 @@
                             </div>
                         @endif
 
-                        <form action="{{ route('students.store') }}" method="POST">
+                        <form action="{{ route('students.store') }}"
+                              method="POST"
+                              enctype="multipart/form-data">
 
                             @csrf
 
                             <div class="mb-3">
                                 <label class="form-label">Register No</label>
-
-                                <input
-                                    type="text"
-                                    name="reg_no"
-                                    class="form-control"
-                                    required
-                                >
+                                <input type="text"
+                                       name="reg_no"
+                                       class="form-control"
+                                       required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Full Name</label>
-
-                                <input
-                                    type="text"
-                                    name="name"
-                                    class="form-control"
-                                    required
-                                >
+                                <input type="text"
+                                       name="name"
+                                       class="form-control"
+                                       required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Email</label>
-
-                                <input
-                                    type="email"
-                                    name="email"
-                                    class="form-control"
-                                    required
-                                >
+                                <input type="email"
+                                       name="email"
+                                       class="form-control"
+                                       required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Phone No</label>
-
-                                <input
-                                    type="text"
-                                    name="phone"
-                                    class="form-control"
-                                    required
-                                >
+                                <input type="text"
+                                       name="phone"
+                                       class="form-control"
+                                       required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Date of Birth</label>
-
-                                <input
-                                    type="date"
-                                    name="dob"
-                                    class="form-control"
-                                    required
-                                >
+                                <input type="date"
+                                       name="dob"
+                                       class="form-control"
+                                       required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Password</label>
+                                <input type="password"
+                                       name="password"
+                                       class="form-control"
+                                       required>
+                            </div>
 
-                                <input
-                                    type="password"
-                                    name="password"
-                                    class="form-control"
-                                    required
-                                >
+                            <!-- Student Image -->
+                            <div class="mb-3">
+                                <label class="form-label">Student Image</label>
+
+                                <input type="file"
+                                       name="image"
+                                       class="form-control"
+                                       accept=".jpg,.jpeg,.png">
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label">Address</label>
 
-                                <textarea
-                                    name="address"
-                                    class="form-control"
-                                    rows="3"
-                                    required
-                                ></textarea>
+                                <textarea name="address"
+                                          class="form-control"
+                                          rows="3"
+                                          required></textarea>
                             </div>
 
-                            <button
-                                type="submit"
-                                class="btn btn-success w-100">
+                            <button type="submit"
+                                    class="btn btn-success w-100">
                                 Register
                             </button>
 
                         </form>
 
                     </div>
-
                 </div>
 
             </div>
@@ -141,24 +131,20 @@
                     <div class="card-body">
 
                         <!-- Search -->
-                        <form
-                            action="{{ route('students.index') }}"
-                            method="GET"
-                            class="mb-3">
+                        <form action="{{ route('students.index') }}"
+                              method="GET"
+                              class="mb-3">
 
                             <div class="input-group">
 
-                                <input
-                                    type="text"
-                                    name="search"
-                                    value="{{ request('search') }}"
-                                    class="form-control"
-                                    placeholder="Search by Register No or Name"
-                                >
+                                <input type="text"
+                                       name="search"
+                                       value="{{ request('search') }}"
+                                       class="form-control"
+                                       placeholder="Search by Register No or Name">
 
-                                <button
-                                    type="submit"
-                                    class="btn btn-primary">
+                                <button type="submit"
+                                        class="btn btn-primary">
                                     Search
                                 </button>
 
@@ -175,6 +161,7 @@
                                 <thead class="table-light">
 
                                 <tr>
+                                    <th>Image</th>
                                     <th>Reg No</th>
                                     <th>Name</th>
                                     <th>DOB</th>
@@ -190,6 +177,29 @@
                                 @forelse($students as $student)
 
                                     <tr>
+
+                                        <!-- Image -->
+                                        <td class="text-center">
+
+                                            @if($student->image)
+
+                                                <img
+                                                    src="{{ asset('storage/' . $student->image) }}"
+                                                    alt="Student Image"
+                                                    width="50"
+                                                    height="50"
+                                                    style="object-fit: cover; border-radius: 50%;">
+
+                                            @else
+
+                                                <span class="text-muted">
+                                                No Image
+                                            </span>
+
+                                            @endif
+
+                                        </td>
+
 
                                         <td>
                                             {{ $student->reg_no }}
@@ -213,24 +223,21 @@
 
                                         <td>
 
-                                            <a
-                                                href="{{ route('students.edit', $student) }}"
-                                                class="btn btn-warning btn-sm">
+                                            <a href="{{ route('students.edit', $student) }}"
+                                               class="btn btn-warning btn-sm">
                                                 Update
                                             </a>
 
-                                            <form
-                                                action="{{ route('students.destroy', $student) }}"
-                                                method="POST"
-                                                style="display:inline;">
+                                            <form action="{{ route('students.destroy', $student) }}"
+                                                  method="POST"
+                                                  style="display:inline;">
 
                                                 @csrf
                                                 @method('DELETE')
 
-                                                <button
-                                                    type="submit"
-                                                    class="btn btn-danger btn-sm"
-                                                    onclick="return confirm('Delete this student?')">
+                                                <button type="submit"
+                                                        class="btn btn-danger btn-sm"
+                                                        onclick="return confirm('Delete this student?')">
                                                     Delete
                                                 </button>
 
@@ -243,13 +250,10 @@
                                 @empty
 
                                     <tr>
-
-                                        <td
-                                            colspan="6"
+                                        <td colspan="7"
                                             class="text-center">
                                             No students found.
                                         </td>
-
                                     </tr>
 
                                 @endforelse
@@ -261,7 +265,6 @@
                         </div>
 
                     </div>
-
                 </div>
 
             </div>

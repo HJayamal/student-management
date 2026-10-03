@@ -19,7 +19,6 @@ class StudentController extends Controller
         return view('students.index', compact('students'));
     }
 
-    // Store new student
     public function store(Request $request)
     {
         $request->validate([
@@ -30,7 +29,14 @@ class StudentController extends Controller
             'dob' => 'required|date',
             'password' => 'required|min:6',
             'address' => 'required',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
+
+        $imagePath = null;
+
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')->store('students', 'public');
+        }
 
         Student::create([
             'reg_no' => $request->reg_no,
@@ -40,20 +46,18 @@ class StudentController extends Controller
             'dob' => $request->dob,
             'password' => $request->password,
             'address' => $request->address,
+            'image' => $imagePath,
         ]);
 
         return redirect()
             ->route('students.index')
             ->with('success', 'Student registered successfully!');
     }
-
-    // Show edit form
     public function edit(Student $student)
     {
         return view('students.edit', compact('student'));
     }
 
-    // Update student
     public function update(Request $request, Student $student)
     {
         $request->validate([
@@ -62,24 +66,30 @@ class StudentController extends Controller
             'email' => 'required|email',
             'phone' => 'required',
             'dob' => 'required|date',
+            'password' => 'nullable|min:6',
             'address' => 'required',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $student->update([
+        $data = [
             'reg_no' => $request->reg_no,
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
             'dob' => $request->dob,
             'address' => $request->address,
-        ]);
+        ];
 
-        // Update password only if a new password is entered
         if ($request->filled('password')) {
-            $student->update([
-                'password' => $request->password,
-            ]);
+            $data['password'] = $request->password;
         }
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')
+                ->store('students', 'public');
+        }
+
+        $student->update($data);
 
         return redirect()
             ->route('students.index')
@@ -94,5 +104,12 @@ class StudentController extends Controller
         return redirect()
             ->route('students.index')
             ->with('success', 'Student deleted successfully!');
+    }
+
+    public function imageList()
+    {
+        $students = Student::all();
+
+        return view('students.image-list', compact('students'));
     }
 }

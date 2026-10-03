@@ -22,6 +22,9 @@ Route::get('/', [AdminController::class, 'dashboard'])
 Route::resource('students', StudentController::class)
     ->except(['show']);
 
+Route::get('/student-image-list', [StudentController::class, 'imageList'])
+    ->name('students.image-list');
+
 Route::resource('admissions', AdmissionController::class)
     ->except(['show']);
 

@@ -1,132 +1,232 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+@extends('layouts.app')
 
-    <title>Update Student</title>
+@section('title', 'Update Student')
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background: #f5f7fb;
-            margin: 0;
-        }
+@section('content')
 
-        .container {
-            width: 500px;
-            margin: 40px auto;
-            background: white;
-            padding: 25px;
-            border-radius: 8px;
-        }
+    <div class="container-fluid">
 
-        input {
-            width: 100%;
-            padding: 10px;
-            margin: 8px 0 15px;
-            box-sizing: border-box;
-        }
+        <div class="row justify-content-center">
 
-        button {
-            width: 100%;
-            padding: 10px;
-            background: green;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
+            <div class="col-md-6">
 
-        .error {
-            color: red;
-            margin-bottom: 15px;
-        }
-    </style>
-</head>
+                <div class="card">
 
-<body>
+                    <div class="card-header bg-warning">
+                        <h3 class="card-title">Update Student</h3>
+                    </div>
 
-@include('component.navbar')
+                    <div class="card-body">
 
-<div class="container">
+                        @if($errors->any())
 
-    <h1>Update Student</h1>
+                            <div class="alert alert-danger">
 
-    @if($errors->any())
-        <div class="error">
-            @foreach($errors->all() as $error)
-                <div>{{ $error }}</div>
-            @endforeach
+                                @foreach($errors->all() as $error)
+                                    <div>{{ $error }}</div>
+                                @endforeach
+
+                            </div>
+
+                        @endif
+
+
+                        <form action="{{ route('students.update', $student) }}"
+                              method="POST"
+                              enctype="multipart/form-data">
+
+                            @csrf
+                            @method('PUT')
+
+
+                            <!-- Register No -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Register No
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="reg_no"
+                                    value="{{ $student->reg_no }}"
+                                    class="form-control"
+                                    required
+                                >
+
+                            </div>
+
+
+                            <!-- Full Name -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Full Name
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="name"
+                                    value="{{ $student->name }}"
+                                    class="form-control"
+                                    required
+                                >
+
+                            </div>
+
+
+                            <!-- Email -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Email
+                                </label>
+
+                                <input
+                                    type="email"
+                                    name="email"
+                                    value="{{ $student->email }}"
+                                    class="form-control"
+                                    required
+                                >
+
+                            </div>
+
+
+                            <!-- Phone -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Phone No
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="phone"
+                                    value="{{ $student->phone }}"
+                                    class="form-control"
+                                    required
+                                >
+
+                            </div>
+
+
+                            <!-- Date of Birth -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Date of Birth
+                                </label>
+
+                                <input
+                                    type="date"
+                                    name="dob"
+                                    value="{{ $student->dob }}"
+                                    class="form-control"
+                                    required
+                                >
+
+                            </div>
+
+
+                            <!-- Password -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    New Password
+                                </label>
+
+                                <input
+                                    type="password"
+                                    name="password"
+                                    class="form-control"
+                                    placeholder="Leave empty to keep old password"
+                                >
+
+                            </div>
+
+
+                            <!-- Student Image -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Student Image
+                                </label>
+
+                                @if($student->image)
+
+                                    <div class="mb-2">
+
+                                        <img
+                                            src="{{ asset('storage/' . $student->image) }}"
+                                            width="120"
+                                            height="120"
+                                            style="object-fit: cover; border-radius: 10px;"
+                                            alt="Student Image">
+
+                                    </div>
+
+                                @else
+
+                                    <p class="text-muted">
+                                        No image uploaded
+                                    </p>
+
+                                @endif
+
+                                <input
+                                    type="file"
+                                    name="image"
+                                    class="form-control"
+                                    accept=".jpg,.jpeg,.png"
+                                >
+
+                            </div>
+
+
+                            <!-- Address -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Address
+                                </label>
+
+                                <textarea
+                                    name="address"
+                                    class="form-control"
+                                    rows="3"
+                                    required>{{ $student->address }}</textarea>
+
+                            </div>
+
+
+                            <!-- Buttons -->
+                            <button
+                                type="submit"
+                                class="btn btn-success">
+
+                                Update Student
+
+                            </button>
+
+                            <a
+                                href="{{ route('students.index') }}"
+                                class="btn btn-secondary">
+
+                                Back
+
+                            </a>
+
+                        </form>
+
+                    </div>
+
+                </div>
+
+            </div>
+
         </div>
-    @endif
 
-    <form action="{{ route('students.update', $student) }}" method="POST">
+    </div>
 
-        @csrf
-        @method('PUT')
-
-        <label>Register No</label>
-        <input
-            type="text"
-            name="reg_no"
-            value="{{ $student->reg_no }}"
-            required
-        >
-
-        <label>Full Name</label>
-        <input
-            type="text"
-            name="name"
-            value="{{ $student->name }}"
-            required
-        >
-
-        <label>Email</label>
-        <input
-            type="email"
-            name="email"
-            value="{{ $student->email }}"
-            required
-        >
-
-        <label>Phone No</label>
-        <input
-            type="text"
-            name="phone"
-            value="{{ $student->phone }}"
-            required
-        >
-
-        <label>Date of Birth</label>
-        <input
-            type="date"
-            name="dob"
-            value="{{ $student->dob }}"
-            required
-        >
-
-        <label>Password</label>
-        <input
-            type="password"
-            name="password"
-            placeholder="Enter new password"
-        >
-
-        <label>Address</label>
-        <input
-            type="text"
-            name="address"
-            value="{{ $student->address }}"
-            required
-        >
-
-        <button type="submit">
-            Update Student
-        </button>
-
-    </form>
-
-</div>
-
-</body>
-</html>
+@endsection

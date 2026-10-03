@@ -147,6 +147,21 @@
 
                     </li>
 
+                    <li class="nav-item">
+
+                        <a href="{{ route('students.image-list') }}"
+                           class="nav-link">
+
+                            <i class="nav-icon bi bi-images"></i>
+
+                            <p>
+                                Student Images
+                            </p>
+
+                        </a>
+
+                    </li>
+
 
                     <!-- Admissions -->
                     <li class="nav-item">
