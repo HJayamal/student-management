@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Student;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 
 class StudentController extends Controller
 {
@@ -35,7 +36,8 @@ class StudentController extends Controller
         $imagePath = null;
 
         if ($request->hasFile('image')) {
-            $imagePath = $request->file('image')->store('students', 'public');
+            $imagePath = $request->file('image')
+                ->store('students', 'public');
         }
 
         Student::create([
@@ -44,7 +46,10 @@ class StudentController extends Controller
             'email' => $request->email,
             'phone' => $request->phone,
             'dob' => $request->dob,
-            'password' => $request->password,
+
+            // Hash password
+            'password' => Hash::make($request->password),
+
             'address' => $request->address,
             'image' => $imagePath,
         ]);
@@ -53,6 +58,7 @@ class StudentController extends Controller
             ->route('students.index')
             ->with('success', 'Student registered successfully!');
     }
+
     public function edit(Student $student)
     {
         return view('students.edit', compact('student'));
@@ -80,9 +86,11 @@ class StudentController extends Controller
             'address' => $request->address,
         ];
 
+
         if ($request->filled('password')) {
-            $data['password'] = $request->password;
+            $data['password'] = Hash::make($request->password);
         }
+
 
         if ($request->hasFile('image')) {
             $data['image'] = $request->file('image')
@@ -96,7 +104,6 @@ class StudentController extends Controller
             ->with('success', 'Student updated successfully!');
     }
 
-    // Delete student
     public function destroy(Student $student)
     {
         $student->delete();

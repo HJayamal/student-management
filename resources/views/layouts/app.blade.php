@@ -57,6 +57,7 @@
             <!-- Right navbar -->
             <ul class="navbar-nav ms-auto">
 
+                <!-- About Us -->
                 <li class="nav-item">
 
                     <a href="{{ route('about') }}"
@@ -68,6 +69,8 @@
 
                 </li>
 
+
+                <!-- Contact Us -->
                 <li class="nav-item">
 
                     <a href="{{ route('contact') }}"
@@ -78,6 +81,40 @@
                     </a>
 
                 </li>
+
+
+                <!-- Logged in student -->
+                @if(session('student_id'))
+
+                    <li class="nav-item">
+
+                        <span class="nav-link">
+
+                            <i class="bi bi-person-circle"></i>
+
+                            Welcome,
+                            {{ session('student_name') }}
+
+                        </span>
+
+                    </li>
+
+
+                    <!-- Logout -->
+                    <li class="nav-item">
+
+                        <a href="{{ route('logout') }}"
+                           class="nav-link text-danger">
+
+                            <i class="bi bi-box-arrow-right"></i>
+
+                            Logout
+
+                        </a>
+
+                    </li>
+
+                @endif
 
             </ul>
 
@@ -147,6 +184,8 @@
 
                     </li>
 
+
+                    <!-- Student Images -->
                     <li class="nav-item">
 
                         <a href="{{ route('students.image-list') }}"
@@ -283,7 +322,7 @@
 
 <!-- OverlayScrollbars -->
 <script
-    src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/browser/overlayscrollbars.browser.es6.min.js">
+    src="https://cdn.jsdelivr.net/npm/overlayscrollbars@2.11.0/browser/overlaysscrollbars.browser.es6.min.js">
 </script>
 
 <!-- AdminLTE -->

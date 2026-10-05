@@ -1,46 +1,58 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\StudentController;
 use App\Http\Controllers\AdmissionController;
 use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\ExamController;
-use App\Http\Controllers\AdminController;
+use App\Http\Controllers\LoginController;
 use Illuminate\Support\Facades\Route;
 
 
-/*
-|--------------------------------------------------------------------------
-| Web Routes
-|--------------------------------------------------------------------------
-*/
 
 
-Route::get('/', [AdminController::class, 'dashboard'])
-    ->name('home');
+Route::get('/login', [LoginController::class, 'login'])
+    ->name('login');
 
-Route::resource('students', StudentController::class)
-    ->except(['show']);
+Route::post('/login-check', [LoginController::class, 'loginCheck'])
+    ->name('login.check');
 
-Route::get('/student-image-list', [StudentController::class, 'imageList'])
-    ->name('students.image-list');
+Route::get('/logout', [LoginController::class, 'logout'])
+    ->name('logout');
 
-Route::resource('admissions', AdmissionController::class)
-    ->except(['show']);
 
-Route::resource('teachers', TeacherController::class)
-    ->except(['show']);
-
-Route::resource('subjects', SubjectController::class)
-    ->except(['show']);
-
-Route::resource('exams', ExamController::class)
-    ->except(['show']);
 
 
 Route::view('/about', 'about')
     ->name('about');
 
-
 Route::view('/contact', 'contact')
     ->name('contact');
+
+
+
+
+Route::middleware('student.auth')->group(function () {
+
+    Route::get('/', [AdminController::class, 'dashboard'])
+        ->name('home');
+
+    Route::resource('students', StudentController::class)
+        ->except(['show']);
+
+    Route::get('/student-image-list', [StudentController::class, 'imageList'])
+        ->name('students.image-list');
+
+    Route::resource('admissions', AdmissionController::class)
+        ->except(['show']);
+
+    Route::resource('teachers', TeacherController::class)
+        ->except(['show']);
+
+    Route::resource('subjects', SubjectController::class)
+        ->except(['show']);
+
+    Route::resource('exams', ExamController::class)
+        ->except(['show']);
+});
