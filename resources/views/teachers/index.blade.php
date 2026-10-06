@@ -112,9 +112,25 @@
 
                 <div class="card">
 
-                    <div class="card-header bg-primary text-white">
-                        <h3 class="card-title">Teacher List</h3>
+                    <!-- Teacher List Header -->
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+
+                        <h3 class="card-title mb-0">
+                            Teacher List
+                        </h3>
+
+                        <!-- Export PDF Button -->
+                        <a
+                            href="{{ route('teachers.export-pdf') }}"
+                            class="btn btn-danger btn-sm">
+
+                            <i class="bi bi-file-earmark-pdf"></i>
+                            Export PDF
+
+                        </a>
+
                     </div>
+
 
                     <div class="card-body">
 
@@ -140,20 +156,31 @@
 
                                     <tr>
 
-                                        <td>{{ $teacher->name }}</td>
+                                        <td>
+                                            {{ $teacher->name }}
+                                        </td>
 
-                                        <td>{{ $teacher->email }}</td>
+                                        <td>
+                                            {{ $teacher->email }}
+                                        </td>
 
-                                        <td>{{ $teacher->phone }}</td>
+                                        <td>
+                                            {{ $teacher->phone }}
+                                        </td>
 
-                                        <td>{{ $teacher->subject }}</td>
+                                        <td>
+                                            {{ $teacher->subject }}
+                                        </td>
 
                                         <td>
 
                                             <a
                                                 href="{{ route('teachers.edit', $teacher) }}"
                                                 class="btn btn-warning btn-sm">
+
+                                                <i class="bi bi-pencil-square"></i>
                                                 Update
+
                                             </a>
 
                                             <form
@@ -162,13 +189,17 @@
                                                 style="display:inline;">
 
                                                 @csrf
+
                                                 @method('DELETE')
 
                                                 <button
                                                     type="submit"
                                                     class="btn btn-danger btn-sm"
                                                     onclick="return confirm('Delete this teacher?')">
+
+                                                    <i class="bi bi-trash"></i>
                                                     Delete
+
                                                 </button>
 
                                             </form>
@@ -180,9 +211,15 @@
                                 @empty
 
                                     <tr>
-                                        <td colspan="5" class="text-center">
+
+                                        <td
+                                            colspan="5"
+                                            class="text-center">
+
                                             No teachers found.
+
                                         </td>
+
                                     </tr>
 
                                 @endforelse

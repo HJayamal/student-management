@@ -41,6 +41,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Register No</label>
+
                                 <input type="text"
                                        name="reg_no"
                                        class="form-control"
@@ -49,6 +50,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Full Name</label>
+
                                 <input type="text"
                                        name="name"
                                        class="form-control"
@@ -57,6 +59,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Email</label>
+
                                 <input type="email"
                                        name="email"
                                        class="form-control"
@@ -65,6 +68,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Phone No</label>
+
                                 <input type="text"
                                        name="phone"
                                        class="form-control"
@@ -73,6 +77,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Date of Birth</label>
+
                                 <input type="date"
                                        name="dob"
                                        class="form-control"
@@ -81,6 +86,7 @@
 
                             <div class="mb-3">
                                 <label class="form-label">Password</label>
+
                                 <input type="password"
                                        name="password"
                                        class="form-control"
@@ -89,31 +95,42 @@
 
                             <!-- Student Image -->
                             <div class="mb-3">
-                                <label class="form-label">Student Image</label>
+
+                                <label class="form-label">
+                                    Student Image
+                                </label>
 
                                 <input type="file"
                                        name="image"
                                        class="form-control"
                                        accept=".jpg,.jpeg,.png">
+
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">Address</label>
+
+                                <label class="form-label">
+                                    Address
+                                </label>
 
                                 <textarea name="address"
                                           class="form-control"
                                           rows="3"
                                           required></textarea>
+
                             </div>
 
                             <button type="submit"
                                     class="btn btn-success w-100">
+
                                 Register
+
                             </button>
 
                         </form>
 
                     </div>
+
                 </div>
 
             </div>
@@ -124,9 +141,25 @@
 
                 <div class="card">
 
-                    <div class="card-header bg-primary text-white">
-                        <h3 class="card-title">Student List</h3>
+                    <!-- Student List Header -->
+                    <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+
+                        <h3 class="card-title mb-0">
+                            Student List
+                        </h3>
+
+                        <!-- Export PDF Button -->
+                        <a href="{{ route('students.export-pdf') }}"
+                           class="btn btn-danger btn-sm">
+
+                            <i class="bi bi-file-earmark-pdf"></i>
+
+                            Export PDF
+
+                        </a>
+
                     </div>
+
 
                     <div class="card-body">
 
@@ -145,7 +178,10 @@
 
                                 <button type="submit"
                                         class="btn btn-primary">
+
+                                    <i class="bi bi-search"></i>
                                     Search
+
                                 </button>
 
                             </div>
@@ -161,6 +197,7 @@
                                 <thead class="table-light">
 
                                 <tr>
+
                                     <th>Image</th>
                                     <th>Reg No</th>
                                     <th>Name</th>
@@ -168,9 +205,11 @@
                                     <th>Email</th>
                                     <th>Phone</th>
                                     <th>Action</th>
+
                                 </tr>
 
                                 </thead>
+
 
                                 <tbody>
 
@@ -193,52 +232,71 @@
                                             @else
 
                                                 <span class="text-muted">
-                                                No Image
-                                            </span>
+                                                    No Image
+                                                </span>
 
                                             @endif
 
                                         </td>
 
 
+                                        <!-- Reg No -->
                                         <td>
                                             {{ $student->reg_no }}
                                         </td>
 
+
+                                        <!-- Name -->
                                         <td>
                                             {{ $student->name }}
                                         </td>
 
+
+                                        <!-- DOB -->
                                         <td>
                                             {{ $student->dob }}
                                         </td>
 
+
+                                        <!-- Email -->
                                         <td>
                                             {{ $student->email }}
                                         </td>
 
+
+                                        <!-- Phone -->
                                         <td>
                                             {{ $student->phone }}
                                         </td>
 
+
+                                        <!-- Action -->
                                         <td>
 
                                             <a href="{{ route('students.edit', $student) }}"
                                                class="btn btn-warning btn-sm">
+
+                                                <i class="bi bi-pencil-square"></i>
                                                 Update
+
                                             </a>
+
 
                                             <form action="{{ route('students.destroy', $student) }}"
                                                   method="POST"
                                                   style="display:inline;">
 
                                                 @csrf
+
                                                 @method('DELETE')
 
                                                 <button type="submit"
                                                         class="btn btn-danger btn-sm"
                                                         onclick="return confirm('Delete this student?')">
+
+                                                    <i class="bi bi-trash"></i>
                                                     Delete
+
                                                 </button>
 
                                             </form>
@@ -250,10 +308,14 @@
                                 @empty
 
                                     <tr>
+
                                         <td colspan="7"
                                             class="text-center">
+
                                             No students found.
+
                                         </td>
+
                                     </tr>
 
                                 @endforelse
@@ -265,6 +327,7 @@
                         </div>
 
                     </div>
+
                 </div>
 
             </div>

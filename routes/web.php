@@ -8,6 +8,7 @@ use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\ExamController;
 use App\Http\Controllers\LoginController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\ExportController;
 
 
 
@@ -40,6 +41,12 @@ Route::middleware('student.auth')->group(function () {
 
     Route::resource('students', StudentController::class)
         ->except(['show']);
+
+    Route::get('/students/export-pdf', [ExportController::class, 'studentsPdf'])
+        ->name('students.export-pdf');
+
+    Route::get('/teachers/export-pdf', [ExportController::class, 'teachersPdf'])
+        ->name('teachers.export-pdf');
 
     Route::get('/student-image-list', [StudentController::class, 'imageList'])
         ->name('students.image-list');
