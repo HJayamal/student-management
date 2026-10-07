@@ -1,3 +1,4 @@
+```
 @extends('layouts.app')
 
 @section('title', 'Students')
@@ -72,9 +73,7 @@
             padding: 24px;
         }
 
-        /* =========================================
-           FORM
-           ========================================= */
+
 
         .student-page .form-label {
             color: #334155 !important;
@@ -134,9 +133,7 @@
             color: #94a3b8 !important;
         }
 
-        /* =========================================
-           REGISTER BUTTON
-           ========================================= */
+
 
         .register-btn {
             width: 100%;
@@ -156,9 +153,6 @@
             box-shadow: 0 7px 18px rgba(16, 185, 129, 0.22);
         }
 
-        /* =========================================
-           ALERTS
-           ========================================= */
 
         .student-page .alert {
             border-radius: 10px !important;
@@ -179,26 +173,71 @@
            PDF BUTTON
            ========================================= */
 
+        .import-form {
+            display: inline-flex !important;
+            align-items: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            flex: 0 0 auto !important;
+        }
+
         .pdf-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             background: #ffffff !important;
             color: #dc2626 !important;
             border: none !important;
             border-radius: 9px !important;
-            padding: 8px 13px;
+            padding: 9px 14px;
             font-size: 13px;
             font-weight: 600;
             white-space: nowrap;
+            text-decoration: none !important;
+            transition: all 0.2s ease;
+        }
+        .import-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: #ffffff !important;
+            color: #2563eb !important;
+            border: none !important;
+            border-radius: 9px !important;
+            padding: 9px 14px;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            margin-right: 6px;
+            text-decoration: none !important;
+            transition: all 0.2s ease;
         }
 
+        .import-btn:hover {
+            background: #eff6ff !important;
+            color: #1d4ed8 !important;
+            transform: translateY(-1px);
+        }
+
+        .header-actions {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            gap: 8px !important;
+            flex-wrap: nowrap !important;
+            white-space: nowrap !important;
+            width: auto !important;
+            min-width: max-content !important;
+        }
         .pdf-btn:hover {
             background: #fef2f2 !important;
             color: #b91c1c !important;
             transform: translateY(-1px);
         }
 
-        /* =========================================
-           SEARCH
-           ========================================= */
+
 
         .search-box {
             background: #f8fafc !important;
@@ -227,19 +266,20 @@
             border-color: #4338ca !important;
         }
 
-        /* =========================================
-           TABLE
-           ========================================= */
+
 
         .student-table {
             background: #ffffff !important;
             border: 1px solid #e2e8f0;
             border-radius: 12px;
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: hidden;
+            position: relative;
         }
 
         .student-table table {
             width: 100%;
+            min-width: 900px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -303,21 +343,28 @@
            ========================================= */
 
         .action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             border: none !important;
             border-radius: 8px !important;
             font-size: 12px;
             font-weight: 600;
-            padding: 7px 10px;
-            margin-right: 3px;
+            padding: 8px 11px;
+            margin-right: 4px;
+            margin-bottom: 4px;
+            white-space: nowrap;
+            min-width: 78px;
+            text-decoration: none !important;
         }
 
         .action-btn.btn-warning {
-            background: #f59e0b !important;
+            background: #2563eb !important;
             color: #ffffff !important;
         }
 
         .action-btn.btn-warning:hover {
-            background: #d97706 !important;
+            background: #1d4ed8 !important;
             color: #ffffff !important;
         }
 
@@ -329,6 +376,39 @@
         .action-btn.btn-danger:hover {
             background: #dc2626 !important;
             color: #ffffff !important;
+        }
+
+        .action-column {
+            min-width: 135px;
+            width: 135px;
+            position: sticky;
+            right: 0;
+            z-index: 4;
+            background: #f8fafc !important;
+            text-align: center;
+            box-shadow: -6px 0 12px rgba(15, 23, 42, 0.05);
+        }
+
+        .action-cell {
+            min-width: 135px;
+            width: 135px;
+            position: sticky;
+            right: 0;
+            z-index: 3;
+            background: #ffffff !important;
+            text-align: center;
+            white-space: normal;
+            box-shadow: -6px 0 12px rgba(15, 23, 42, 0.05);
+        }
+
+        .action-cell .action-btn {
+            width: 108px;
+            margin: 2px auto !important;
+        }
+
+        .action-cell form {
+            display: block !important;
+            margin: 0 !important;
         }
 
         /* =========================================
@@ -383,15 +463,46 @@
                 font-size: 16px;
             }
 
-            .pdf-btn {
+
+            .header-actions {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                align-items: center !important;
+                gap: 4px !important;
+            }
+
+            .import-form {
+                display: inline-flex !important;
+            }
+
+            .pdf-btn,
+            .import-btn {
                 padding: 7px 9px;
                 font-size: 12px;
+            }
+
+            .header-actions {
+                gap: 3px;
             }
 
             .student-table tbody td,
             .student-table thead th {
                 font-size: 12px;
                 padding: 9px !important;
+            }
+
+
+            .action-column,
+            .action-cell {
+                min-width: 125px;
+                width: 125px;
+            }
+
+            .action-cell .action-btn {
+                width: 100px;
+                font-size: 11px;
+                padding: 7px 8px;
             }
 
         }
@@ -684,16 +795,48 @@
                         </div>
 
 
-                        <!-- EXPORT PDF -->
-                        <a
-                            href="{{ route('students.export-pdf') }}"
-                            class="pdf-btn">
+                        <!-- IMPORT CSV + EXPORT PDF -->
+                        <div class="header-actions">
 
-                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            <form
+                                action="{{ route('students.import') }}"
+                                method="POST"
+                                enctype="multipart/form-data"
+                                class="d-inline import-form">
 
-                            Export PDF
+                                @csrf
 
-                        </a>
+                                <input
+                                    type="file"
+                                    name="file"
+                                    id="studentImport"
+                                    accept=".csv,.txt"
+                                    class="d-none">
+
+                                <label
+                                    for="studentImport"
+                                    class="import-btn mb-0">
+
+                                    <i class="bi bi-upload me-1"></i>
+
+                                    Import CSV
+
+                                </label>
+
+                            </form>
+
+                            <a
+                                href="{{ route('students.export-pdf') }}"
+                                class="pdf-btn"
+                                style="text-decoration: none !important;">
+
+                                <i class="bi bi-file-earmark-pdf me-1"></i>
+
+                                Export PDF
+
+                            </a>
+
+                        </div>
 
                     </div>
 
@@ -749,7 +892,7 @@
                                     <th>DOB</th>
                                     <th>Email</th>
                                     <th>Phone</th>
-                                    <th>Action</th>
+                                    <th class="action-column">Action</th>
 
                                 </tr>
 
@@ -819,7 +962,7 @@
 
 
                                         <!-- ACTION -->
-                                        <td>
+                                        <td class="action-cell">
 
                                             <!-- UPDATE -->
                                             <a
@@ -898,4 +1041,20 @@
 
     </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const importInput = document.getElementById('studentImport');
+
+            if (importInput) {
+                importInput.addEventListener('change', function () {
+                    if (this.files.length > 0) {
+                        this.form.submit();
+                    }
+                });
+            }
+        });
+    </script>
+
 @endsection
+
+```

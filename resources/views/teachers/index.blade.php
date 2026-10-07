@@ -1,3 +1,4 @@
+```
 @extends('layouts.app')
 
 @section('title', 'Teachers')
@@ -157,6 +158,27 @@
             white-space: nowrap;
             transition: all 0.2s ease;
         }
+
+        .import-btn {
+            background: #ffffff !important;
+            color: #2563eb !important;
+            border: none !important;
+            border-radius: 9px !important;
+            padding: 8px 13px;
+            font-size: 13px;
+            font-weight: 600;
+            white-space: nowrap;
+            cursor: pointer;
+            margin-right: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .import-btn:hover {
+            background: #eff6ff !important;
+            color: #1d4ed8 !important;
+            transform: translateY(-1px);
+        }
+
 
         .pdf-btn:hover {
             background: #fef2f2 !important;
@@ -568,17 +590,48 @@
                         </div>
 
 
-                        <!-- EXPORT PDF -->
+                        <!-- IMPORT CSV + EXPORT PDF -->
 
-                        <a
-                            href="{{ route('teachers.export-pdf') }}"
-                            class="pdf-btn">
+                        <div class="d-flex align-items-center">
 
-                            <i class="bi bi-file-earmark-pdf me-1"></i>
+                            <form
+                                action="{{ route('teachers.import') }}"
+                                method="POST"
+                                enctype="multipart/form-data"
+                                class="d-inline">
 
-                            Export PDF
+                                @csrf
 
-                        </a>
+                                <input
+                                    type="file"
+                                    name="file"
+                                    id="teacherImport"
+                                    accept=".csv,.txt"
+                                    class="d-none">
+
+                                <label
+                                    for="teacherImport"
+                                    class="import-btn mb-0">
+
+                                    <i class="bi bi-upload me-1"></i>
+
+                                    Import CSV
+
+                                </label>
+
+                            </form>
+
+                            <a
+                                href="{{ route('teachers.export-pdf') }}"
+                                class="pdf-btn">
+
+                                <i class="bi bi-file-earmark-pdf me-1"></i>
+
+                                Export PDF
+
+                            </a>
+
+                        </div>
 
                     </div>
 
@@ -762,4 +815,20 @@
 
     </div>
 
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const importInput = document.getElementById('teacherImport');
+
+            if (importInput) {
+                importInput.addEventListener('change', function () {
+                    if (this.files.length > 0) {
+                        this.form.submit();
+                    }
+                });
+            }
+        });
+    </script>
+
 @endsection
+
+```

@@ -9,7 +9,7 @@ use App\Http\Controllers\ExamController;
 use App\Http\Controllers\LoginController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ExportController;
-
+use App\Http\Controllers\ImportController;
 
 
 
@@ -47,6 +47,12 @@ Route::middleware('student.auth')->group(function () {
 
     Route::get('/teachers/export-pdf', [ExportController::class, 'teachersPdf'])
         ->name('teachers.export-pdf');
+
+    Route::post('/students/import', [ImportController::class, 'students'])
+        ->name('students.import');
+
+    Route::post('/teachers/import', [ImportController::class, 'teachers'])
+        ->name('teachers.import');
 
     Route::get('/student-image-list', [StudentController::class, 'imageList'])
         ->name('students.image-list');
