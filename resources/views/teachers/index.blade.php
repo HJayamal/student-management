@@ -147,30 +147,60 @@
 
         /* PDF BUTTON */
 
+        .header-actions {
+            display: flex !important;
+            flex-direction: row !important;
+            align-items: center !important;
+            justify-content: flex-end !important;
+            gap: 8px !important;
+            flex-wrap: nowrap !important;
+            white-space: nowrap !important;
+            width: auto !important;
+            min-width: max-content !important;
+        }
+
+        .import-form {
+            display: inline-flex !important;
+            align-items: center !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            flex: 0 0 auto !important;
+        }
+
         .pdf-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             background: #ffffff !important;
             color: #dc2626 !important;
             border: none !important;
             border-radius: 9px !important;
-            padding: 8px 13px;
+            padding: 9px 14px;
             font-size: 13px;
             font-weight: 600;
             white-space: nowrap;
+            text-decoration: none !important;
             transition: all 0.2s ease;
+            flex: 0 0 auto !important;
         }
 
         .import-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             background: #ffffff !important;
             color: #2563eb !important;
             border: none !important;
             border-radius: 9px !important;
-            padding: 8px 13px;
+            padding: 9px 14px;
             font-size: 13px;
             font-weight: 600;
             white-space: nowrap;
             cursor: pointer;
-            margin-right: 6px;
+            margin-right: 0;
+            text-decoration: none !important;
             transition: all 0.2s ease;
+            flex: 0 0 auto !important;
         }
 
         .import-btn:hover {
@@ -192,11 +222,14 @@
             background: #ffffff !important;
             border: 1px solid #e2e8f0;
             border-radius: 12px;
-            overflow: hidden;
+            overflow-x: auto;
+            overflow-y: hidden;
+            position: relative;
         }
 
         .teacher-table table {
             width: 100%;
+            min-width: 720px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -251,21 +284,27 @@
         /* ACTION BUTTONS */
 
         .action-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
             border: none !important;
             border-radius: 8px !important;
             font-size: 12px;
             font-weight: 600;
-            padding: 7px 10px;
-            margin-right: 3px;
+            padding: 8px 11px;
+            margin: 2px auto !important;
+            white-space: nowrap;
+            min-width: 100px;
+            text-decoration: none !important;
         }
 
         .action-btn.btn-warning {
-            background: #f59e0b !important;
+            background: #2563eb !important;
             color: #ffffff !important;
         }
 
         .action-btn.btn-warning:hover {
-            background: #d97706 !important;
+            background: #1d4ed8 !important;
             color: #ffffff !important;
         }
 
@@ -277,6 +316,24 @@
         .action-btn.btn-danger:hover {
             background: #dc2626 !important;
             color: #ffffff !important;
+        }
+
+        .action-column {
+            min-width: 130px;
+            width: 130px;
+            text-align: center;
+        }
+
+        .action-cell {
+            min-width: 130px;
+            width: 130px;
+            text-align: center;
+            white-space: normal;
+        }
+
+        .action-cell form {
+            display: block !important;
+            margin: 0 !important;
         }
 
         /* EMPTY STATE */
@@ -323,9 +380,30 @@
                 font-size: 16px;
             }
 
-            .pdf-btn {
+            .pdf-btn,
+            .import-btn {
                 padding: 7px 9px;
                 font-size: 12px;
+            }
+
+            .header-actions {
+                display: flex !important;
+                flex-direction: row !important;
+                flex-wrap: nowrap !important;
+                align-items: center !important;
+                gap: 4px !important;
+            }
+
+            .action-column,
+            .action-cell {
+                min-width: 115px;
+                width: 115px;
+            }
+
+            .action-btn {
+                min-width: 90px;
+                font-size: 11px;
+                padding: 7px 8px;
             }
 
             .teacher-table tbody td,
@@ -592,13 +670,13 @@
 
                         <!-- IMPORT CSV + EXPORT PDF -->
 
-                        <div class="d-flex align-items-center">
+                        <div class="header-actions">
 
                             <form
                                 action="{{ route('teachers.import') }}"
                                 method="POST"
                                 enctype="multipart/form-data"
-                                class="d-inline">
+                                class="d-inline import-form">
 
                                 @csrf
 
@@ -623,7 +701,8 @@
 
                             <a
                                 href="{{ route('teachers.export-pdf') }}"
-                                class="pdf-btn">
+                                class="pdf-btn"
+                                style="text-decoration: none !important;">
 
                                 <i class="bi bi-file-earmark-pdf me-1"></i>
 
@@ -657,7 +736,7 @@
 
                                     <th>Subject</th>
 
-                                    <th>Action</th>
+                                    <th class="action-column">Action</th>
 
                                 </tr>
 
@@ -719,7 +798,7 @@
 
                                         <!-- ACTION -->
 
-                                        <td>
+                                        <td class="action-cell">
 
 
                                             <!-- UPDATE -->
