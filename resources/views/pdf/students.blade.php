@@ -8,12 +8,13 @@
     <style>
         body {
             font-family: DejaVu Sans, sans-serif;
-            font-size: 12px;
+            font-size: 10px;
         }
 
         h2 {
             text-align: center;
             margin-bottom: 20px;
+            font-size: 18px;
         }
 
         table {
@@ -23,11 +24,13 @@
 
         th, td {
             border: 1px solid #000;
-            padding: 8px;
+            padding: 6px;
+            vertical-align: middle;
         }
 
         th {
             background-color: #eeeeee;
+            font-weight: bold;
         }
     </style>
 </head>
@@ -41,7 +44,10 @@
     <thead>
     <tr>
         <th>Reg No</th>
-        <th>Name</th>
+        <th>First Name</th>
+        <th>Last Name</th>
+        <th>Gender</th>
+        <th>NIC</th>
         <th>DOB</th>
         <th>Email</th>
         <th>Phone</th>
@@ -55,7 +61,10 @@
 
         <tr>
             <td>{{ $student->reg_no }}</td>
-            <td>{{ $student->name }}</td>
+            <td>{{ $student->first_name ?: $student->name }}</td>
+            <td>{{ $student->last_name ?: '-' }}</td>
+            <td>{{ $student->gender ?: '-' }}</td>
+            <td>{{ $student->nic ?: '-' }}</td>
             <td>{{ $student->dob }}</td>
             <td>{{ $student->email }}</td>
             <td>{{ $student->phone }}</td>

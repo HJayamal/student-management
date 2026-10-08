@@ -24,7 +24,10 @@ class StudentController extends Controller
     {
         $request->validate([
             'reg_no' => 'required|unique:students,reg_no',
-            'name' => 'required',
+            'first_name' => 'required',
+            'last_name' => 'required',
+            'gender' => 'required',
+            'nic' => 'required',
             'email' => 'required|email',
             'phone' => 'required',
             'dob' => 'required|date',
@@ -40,16 +43,22 @@ class StudentController extends Controller
                 ->store('students', 'public');
         }
 
+        // Create full name for existing system functions
+        $fullName = trim(
+            $request->first_name . ' ' . $request->last_name
+        );
+
         Student::create([
             'reg_no' => $request->reg_no,
-            'name' => $request->name,
+            'name' => $fullName,
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
+            'gender' => $request->gender,
+            'nic' => $request->nic,
             'email' => $request->email,
             'phone' => $request->phone,
             'dob' => $request->dob,
-
-            // Hash password
             'password' => Hash::make($request->password),
-
             'address' => $request->address,
             'image' => $imagePath,
         ]);
@@ -68,7 +77,10 @@ class StudentController extends Controller
     {
         $request->validate([
             'reg_no' => 'required|unique:students,reg_no,' . $student->id,
-            'name' => 'required',
+            'first_name' => 'required',
+            'last_name' => 'required',
+            'gender' => 'required',
+            'nic' => 'required',
             'email' => 'required|email',
             'phone' => 'required',
             'dob' => 'required|date',
@@ -79,18 +91,22 @@ class StudentController extends Controller
 
         $data = [
             'reg_no' => $request->reg_no,
-            'name' => $request->name,
+            'name' => trim(
+                $request->first_name . ' ' . $request->last_name
+            ),
+            'first_name' => $request->first_name,
+            'last_name' => $request->last_name,
+            'gender' => $request->gender,
+            'nic' => $request->nic,
             'email' => $request->email,
             'phone' => $request->phone,
             'dob' => $request->dob,
             'address' => $request->address,
         ];
 
-
         if ($request->filled('password')) {
             $data['password'] = Hash::make($request->password);
         }
-
 
         if ($request->hasFile('image')) {
             $data['image'] = $request->file('image')

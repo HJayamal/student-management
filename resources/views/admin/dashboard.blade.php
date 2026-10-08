@@ -823,6 +823,41 @@
                     </div>
 
 
+                    <!-- ADMISSIONS -->
+
+                    <div class="col-lg-3 col-md-6">
+
+                        <a
+                            href="{{ route('admissions.index') }}"
+                            class="quick-action">
+
+                        <span class="quick-action-icon">
+
+                            <i class="bi bi-person-plus-fill"></i>
+
+                        </span>
+
+                            <span>
+
+                            <div class="quick-action-title">
+
+                                Manage Admissions
+
+                            </div>
+
+                            <div class="quick-action-text">
+
+                                View and update admissions
+
+                            </div>
+
+                        </span>
+
+                        </a>
+
+                    </div>
+
+
                     <!-- TEACHERS -->
 
                     <div class="col-lg-3 col-md-6">

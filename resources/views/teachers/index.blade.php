@@ -1,3 +1,4 @@
+````
 ```
 @extends('layouts.app')
 
@@ -229,7 +230,7 @@
 
         .teacher-table table {
             width: 100%;
-            min-width: 720px;
+            min-width: 900px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -267,6 +268,30 @@
         .teacher-name {
             font-weight: 600;
             color: #1e293b !important;
+        }
+
+        /* TEACHER IMAGE */
+
+        .teacher-avatar {
+            width: 50px;
+            height: 50px;
+            object-fit: cover;
+            border-radius: 50%;
+            border: 2px solid #e2e8f0;
+        }
+
+        .teacher-no-image {
+            width: 50px;
+            height: 50px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background: #f1f5f9;
+            color: #94a3b8;
+            font-size: 10px;
+            font-weight: 600;
+            text-align: center;
         }
 
         /* SUBJECT BADGE */
@@ -513,7 +538,8 @@
 
                         <form
                             action="{{ route('teachers.store') }}"
-                            method="POST">
+                            method="POST"
+                            enctype="multipart/form-data">
 
                             @csrf
 
@@ -574,6 +600,49 @@
                                     value="{{ old('phone') }}"
                                     required
                                 >
+
+                            </div>
+
+
+                            <!-- GENDER -->
+
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Gender
+                                </label>
+
+                                <select
+                                    name="gender"
+                                    class="form-control"
+                                    required
+                                >
+                                    <option value="">Select Gender</option>
+                                    <option value="Male" {{ old('gender') == 'Male' ? 'selected' : '' }}>Male</option>
+                                    <option value="Female" {{ old('gender') == 'Female' ? 'selected' : '' }}>Female</option>
+                                </select>
+
+                            </div>
+
+
+                            <!-- IMAGE -->
+
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Teacher Image
+                                </label>
+
+                                <input
+                                    type="file"
+                                    name="image"
+                                    class="form-control"
+                                    accept=".jpg,.jpeg,.png"
+                                >
+
+                                <small class="text-muted">
+                                    JPG, JPEG or PNG (Max 2MB)
+                                </small>
 
                             </div>
 
@@ -722,17 +791,21 @@
 
                         <div class="table-responsive teacher-table">
 
-                            <table class="table align-middle">
+                            <table id="teacherTable" class="table align-middle">
 
                                 <thead>
 
                                 <tr>
+
+                                    <th>Image</th>
 
                                     <th>Name</th>
 
                                     <th>Email</th>
 
                                     <th>Phone</th>
+
+                                    <th>Gender</th>
 
                                     <th>Subject</th>
 
@@ -750,6 +823,29 @@
 
 
                                     <tr>
+
+
+                                        <!-- IMAGE -->
+
+                                        <td class="text-center">
+
+                                            @if($teacher->image)
+
+                                                <img
+                                                    src="{{ asset('storage/' . $teacher->image) }}"
+                                                    alt="Teacher Image"
+                                                    class="teacher-avatar"
+                                                >
+
+                                            @else
+
+                                                <div class="teacher-no-image">
+                                                    No Image
+                                                </div>
+
+                                            @endif
+
+                                        </td>
 
 
                                         <!-- NAME -->
@@ -780,6 +876,13 @@
 
                                             {{ $teacher->phone }}
 
+                                        </td>
+
+
+                                        <!-- GENDER -->
+
+                                        <td>
+                                            {{ $teacher->gender }}
                                         </td>
 
 
@@ -851,7 +954,7 @@
                                     <tr>
 
                                         <td
-                                            colspan="5"
+                                            colspan="7"
                                             class="text-center empty-state">
 
                                             <i
@@ -908,6 +1011,44 @@
         });
     </script>
 
+    <!-- DataTables -->
+
+    <link rel="stylesheet"
+          href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+
+            $('#teacherTable').DataTable({
+
+                paging: true,
+
+                ordering: true,
+
+                searching: false,
+
+                pageLength: 10,
+
+                lengthMenu: [5, 10, 25, 50, 100],
+
+                columnDefs: [
+                    {
+                        targets: -1,
+                        orderable: false
+                    }
+                ]
+
+            });
+
+        });
+    </script>
+
 @endsection
 
 ```
+
+````

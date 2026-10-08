@@ -20,14 +20,25 @@ class TeacherController extends Controller
             'name' => 'required',
             'email' => 'required|email',
             'phone' => 'required',
+            'gender' => 'required',
             'subject' => 'required',
             'address' => 'required',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
+
+        $imagePath = null;
+
+        if ($request->hasFile('image')) {
+            $imagePath = $request->file('image')
+                ->store('teachers', 'public');
+        }
 
         Teacher::create([
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
+            'gender' => $request->gender,
+            'image' => $imagePath,
             'subject' => $request->subject,
             'address' => $request->address,
         ]);
@@ -48,17 +59,27 @@ class TeacherController extends Controller
             'name' => 'required',
             'email' => 'required|email',
             'phone' => 'required',
+            'gender' => 'required',
             'subject' => 'required',
             'address' => 'required',
+            'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
-        $teacher->update([
+        $data = [
             'name' => $request->name,
             'email' => $request->email,
             'phone' => $request->phone,
+            'gender' => $request->gender,
             'subject' => $request->subject,
             'address' => $request->address,
-        ]);
+        ];
+
+        if ($request->hasFile('image')) {
+            $data['image'] = $request->file('image')
+                ->store('teachers', 'public');
+        }
+
+        $teacher->update($data);
 
         return redirect()
             ->route('teachers.index')

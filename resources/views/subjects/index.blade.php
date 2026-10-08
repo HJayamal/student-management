@@ -152,7 +152,7 @@
 
         .subject-table {
             width: 100%;
-            min-width: 760px;
+            min-width: 860px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -194,6 +194,18 @@
             border-radius: 999px;
             font-size: 12px;
             font-weight: 700;
+        }
+
+        .course-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #ecfdf5;
+            color: #047857 !important;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
         }
 
         .subject-name {
@@ -411,6 +423,21 @@
 
                             <div class="mb-3">
                                 <label class="form-label">
+                                    Course Name
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="course_name"
+                                    class="form-control"
+                                    placeholder="BSc Software Engineering"
+                                    value="{{ old('course_name') }}"
+                                    required
+                                >
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">
                                     Subject Name
                                 </label>
 
@@ -502,6 +529,7 @@
                                 <thead>
                                 <tr>
                                     <th>Code</th>
+                                    <th>Course</th>
                                     <th>Subject</th>
                                     <th>Teacher</th>
                                     <th>Description</th>
@@ -519,6 +547,13 @@
                                             <span class="code-badge">
                                                 <i class="bi bi-hash me-1"></i>
                                                 {{ $subject->subject_code }}
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="course-badge">
+                                                <i class="bi bi-mortarboard-fill me-1"></i>
+                                                {{ $subject->course_name ?: 'No course' }}
                                             </span>
                                         </td>
 
@@ -579,7 +614,7 @@
                                     <tr>
 
                                         <td
-                                            colspan="5"
+                                            colspan="6"
                                             class="text-center empty-state">
 
                                             <i class="bi bi-journal-x d-block mb-2"></i>

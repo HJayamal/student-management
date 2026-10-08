@@ -1,3 +1,4 @@
+```
 @extends('layouts.app')
 
 @section('title', 'Exams')
@@ -154,7 +155,7 @@
 
         .exam-table {
             width: 100%;
-            min-width: 820px;
+            min-width: 1080px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -191,6 +192,31 @@
             color: #0f172a !important;
             font-weight: 700;
             line-height: 1.35;
+        }
+
+        .course-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #ecfdf5;
+            color: #047857 !important;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .marks-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 42px;
+            background: #fef3c7;
+            color: #b45309 !important;
+            padding: 6px 9px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .subject-badge {
@@ -361,6 +387,105 @@
                 padding: 7px 8px;
             }
         }
+
+        /* =========================================
+           DATATABLES
+           ========================================= */
+
+        .dataTables_wrapper {
+            color: #475569 !important;
+            font-size: 13px;
+            padding-top: 4px;
+        }
+
+        .dataTables_wrapper .dataTables_length {
+            margin-bottom: 12px;
+        }
+
+        .dataTables_wrapper .dataTables_length label {
+            color: #475569 !important;
+            font-weight: 600;
+        }
+
+        .dataTables_wrapper .dataTables_length select {
+            border: 1px solid #dbe3ef !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+            color: #334155 !important;
+            padding: 5px 28px 5px 8px !important;
+            margin: 0 5px;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        .dataTables_wrapper .dataTables_info {
+            color: #64748b !important;
+            font-size: 12px;
+            padding-top: 14px !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate {
+            padding-top: 10px !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 7px !important;
+            background: #ffffff !important;
+            color: #475569 !important;
+            padding: 6px 10px !important;
+            margin-left: 4px !important;
+            font-size: 12px;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+            background: #eef2ff !important;
+            color: #4338ca !important;
+            border-color: #c7d2fe !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            background: #4f46e5 !important;
+            color: #ffffff !important;
+            border-color: #4f46e5 !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+            background: #4338ca !important;
+            color: #ffffff !important;
+            border-color: #4338ca !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+            color: #cbd5e1 !important;
+            background: #f8fafc !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        table.dataTable {
+            border-collapse: separate !important;
+            border-spacing: 0;
+        }
+
+        table.dataTable thead th {
+            color: #334155 !important;
+        }
+
+        @media (max-width: 576px) {
+            .dataTables_wrapper .dataTables_length {
+                margin-bottom: 8px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 5px 8px !important;
+                margin-left: 2px !important;
+            }
+
+            .dataTables_wrapper .dataTables_info {
+                font-size: 11px;
+            }
+        }
+
     </style>
 
     <div class="exam-page">
@@ -434,14 +559,57 @@
                                     Exam Name
                                 </label>
 
-                                <input
-                                    type="text"
+                                <select
                                     name="exam_name"
-                                    class="form-control"
-                                    placeholder="Mid Term Exam"
-                                    value="{{ old('exam_name') }}"
-                                    required
-                                >
+                                    class="form-select"
+                                    required>
+
+                                    <option value="">Select Exam</option>
+
+                                    <option value="Quiz"
+                                        {{ old('exam_name') == 'Quiz' ? 'selected' : '' }}>
+                                        Quiz
+                                    </option>
+
+                                    <option value="Assignment"
+                                        {{ old('exam_name') == 'Assignment' ? 'selected' : '' }}>
+                                        Assignment
+                                    </option>
+
+                                    <option value="Mid Term Exam"
+                                        {{ old('exam_name') == 'Mid Term Exam' ? 'selected' : '' }}>
+                                        Mid Term Exam
+                                    </option>
+
+                                    <option value="Final Exam"
+                                        {{ old('exam_name') == 'Final Exam' ? 'selected' : '' }}>
+                                        Final Exam
+                                    </option>
+
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Course Name
+                                </label>
+
+                                <select
+                                    name="course_name"
+                                    id="courseName"
+                                    class="form-select"
+                                    required>
+
+                                    <option value="">Select Course</option>
+
+                                    @foreach($subjects->pluck('course_name')->filter()->unique()->sort()->values() as $course)
+                                        <option value="{{ $course }}"
+                                            {{ old('course_name') == $course ? 'selected' : '' }}>
+                                            {{ $course }}
+                                        </option>
+                                    @endforeach
+
+                                </select>
                             </div>
 
                             <div class="mb-3">
@@ -449,12 +617,41 @@
                                     Subject
                                 </label>
 
-                                <input
-                                    type="text"
+                                <select
                                     name="subject"
+                                    id="subjectName"
+                                    class="form-select"
+                                    required>
+
+                                    <option value="">Select Subject</option>
+
+                                    @foreach($subjects as $subject)
+                                        @if($subject->course_name)
+                                            <option
+                                                value="{{ $subject->subject_name }}"
+                                                data-course="{{ $subject->course_name }}"
+                                                {{ old('subject') == $subject->subject_name ? 'selected' : '' }}>
+                                                {{ $subject->subject_name }}
+                                            </option>
+                                        @endif
+                                    @endforeach
+
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">
+                                    Marks
+                                </label>
+
+                                <input
+                                    type="number"
+                                    name="marks"
                                     class="form-control"
-                                    placeholder="Software Engineering"
-                                    value="{{ old('subject') }}"
+                                    placeholder="100"
+                                    value="{{ old('marks') }}"
+                                    min="0"
+                                    max="100"
                                     required
                                 >
                             </div>
@@ -556,12 +753,14 @@
 
                         <div class="exam-table-wrap">
 
-                            <table class="table align-middle exam-table">
+                            <table id="examTable" class="table align-middle exam-table">
 
                                 <thead>
                                 <tr>
                                     <th>Exam</th>
+                                    <th>Course</th>
                                     <th>Subject</th>
+                                    <th>Marks</th>
                                     <th>Date</th>
                                     <th>Duration</th>
                                     <th>Status</th>
@@ -582,9 +781,22 @@
                                         </td>
 
                                         <td>
+                                            <span class="course-badge">
+                                                <i class="bi bi-mortarboard-fill me-1"></i>
+                                                {{ $exam->course_name ?: 'No course' }}
+                                            </span>
+                                        </td>
+
+                                        <td>
                                             <span class="subject-badge">
                                                 <i class="bi bi-book me-1"></i>
                                                 {{ $exam->subject }}
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="marks-badge">
+                                                {{ $exam->marks ?? '-' }}
                                             </span>
                                         </td>
 
@@ -657,7 +869,7 @@
                                     <tr>
 
                                         <td
-                                            colspan="6"
+                                            colspan="8"
                                             class="text-center empty-state">
 
                                             <i class="bi bi-calendar-x d-block mb-2"></i>
@@ -692,4 +904,92 @@
 
     </div>
 
+    <!-- Course -> Subject dynamic selection -->
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+
+            const courseSelect = document.getElementById('courseName');
+            const subjectSelect = document.getElementById('subjectName');
+
+            if (!courseSelect || !subjectSelect) {
+                return;
+            }
+
+            const subjectOptions = Array.from(subjectSelect.options)
+                .slice(1)
+                .map(function (option) {
+                    return option.cloneNode(true);
+                });
+
+            function filterSubjects() {
+
+                const selectedCourse = courseSelect.value;
+                const oldSubject = @json(old('subject'));
+
+                subjectSelect.innerHTML = '<option value="">Select Subject</option>';
+
+                subjectOptions.forEach(function (option) {
+
+                    if (option.dataset.course === selectedCourse) {
+
+                        const newOption = option.cloneNode(true);
+
+                        if (oldSubject === newOption.value) {
+                            newOption.selected = true;
+                        }
+
+                        subjectSelect.appendChild(newOption);
+                    }
+
+                });
+            }
+
+            courseSelect.addEventListener('change', filterSubjects);
+
+            if (courseSelect.value) {
+                filterSubjects();
+            }
+
+        });
+    </script>
+
+    <!-- DataTables -->
+
+    <link rel="stylesheet"
+          href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+
+            $('#examTable').DataTable({
+
+                paging: true,
+
+                ordering: true,
+
+                searching: false,
+
+                pageLength: 10,
+
+                lengthMenu: [5, 10, 25, 50, 100],
+
+                columnDefs: [
+                    {
+                        targets: -1,
+                        orderable: false
+                    }
+                ]
+
+            });
+
+        });
+    </script>
+
 @endsection
+
+```

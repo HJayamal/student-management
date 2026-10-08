@@ -1,3 +1,4 @@
+````
 ```
 @extends('layouts.app')
 
@@ -103,6 +104,23 @@
         .student-page textarea.form-control {
             min-height: 95px;
             resize: vertical;
+        }
+
+        .student-page .form-select {
+            background-color: #ffffff !important;
+            color: #1e293b !important;
+            border: 1px solid #dbe3ef !important;
+            border-radius: 10px !important;
+            padding: 11px 13px !important;
+            min-height: 44px;
+            box-shadow: none !important;
+        }
+
+        .student-page .form-select:focus {
+            background-color: #ffffff !important;
+            color: #1e293b !important;
+            border-color: #6366f1 !important;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12) !important;
         }
 
         .student-page .form-control::placeholder {
@@ -279,7 +297,7 @@
 
         .student-table table {
             width: 100%;
-            min-width: 900px;
+            min-width: 1000px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -506,6 +524,116 @@
             }
 
         }
+
+        /* =========================================
+           DATATABLES
+           ========================================= */
+
+        .dataTables_wrapper {
+            color: #475569 !important;
+            font-size: 13px;
+            padding-top: 4px;
+        }
+
+        .dataTables_wrapper .dataTables_length,
+        .dataTables_wrapper .dataTables_info,
+        .dataTables_wrapper .dataTables_paginate {
+            color: #64748b !important;
+        }
+
+        .dataTables_wrapper .dataTables_length {
+            margin-bottom: 12px;
+        }
+
+        .dataTables_wrapper .dataTables_length label {
+            color: #475569 !important;
+            font-weight: 600;
+        }
+
+        .dataTables_wrapper .dataTables_length select {
+            border: 1px solid #dbe3ef !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+            color: #334155 !important;
+            padding: 5px 28px 5px 8px !important;
+            margin: 0 5px;
+            outline: none !important;
+            box-shadow: none !important;
+        }
+
+        .dataTables_wrapper .dataTables_info {
+            padding-top: 14px !important;
+            font-size: 12px;
+        }
+
+        .dataTables_wrapper .dataTables_paginate {
+            padding-top: 10px !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button {
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 7px !important;
+            background: #ffffff !important;
+            color: #475569 !important;
+            padding: 6px 10px !important;
+            margin-left: 4px !important;
+            font-size: 12px;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+            background: #eef2ff !important;
+            color: #4338ca !important;
+            border-color: #c7d2fe !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current {
+            background: #4f46e5 !important;
+            color: #ffffff !important;
+            border-color: #4f46e5 !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.current:hover {
+            background: #4338ca !important;
+            color: #ffffff !important;
+            border-color: #4338ca !important;
+        }
+
+        .dataTables_wrapper .dataTables_paginate .paginate_button.disabled {
+            color: #cbd5e1 !important;
+            background: #f8fafc !important;
+            border-color: #e2e8f0 !important;
+        }
+
+        table.dataTable {
+            border-collapse: separate !important;
+            border-spacing: 0;
+        }
+
+        table.dataTable thead th {
+            color: #334155 !important;
+        }
+
+        table.dataTable thead .sorting,
+        table.dataTable thead .sorting_asc,
+        table.dataTable thead .sorting_desc {
+            background-position: center right;
+        }
+
+        @media (max-width: 576px) {
+            .dataTables_wrapper .dataTables_length {
+                margin-bottom: 8px;
+            }
+
+            .dataTables_wrapper .dataTables_paginate .paginate_button {
+                padding: 5px 8px !important;
+                margin-left: 2px !important;
+            }
+
+            .dataTables_wrapper .dataTables_info {
+                font-size: 11px;
+            }
+        }
+
     </style>
 
 
@@ -619,19 +747,74 @@
                             </div>
 
 
-                            <!-- FULL NAME -->
+                            <!-- FIRST NAME -->
                             <div class="mb-3">
 
                                 <label class="form-label">
-                                    Full Name
+                                    First Name
                                 </label>
 
                                 <input
                                     type="text"
-                                    name="name"
+                                    name="first_name"
                                     class="form-control"
-                                    placeholder="Enter student's full name"
-                                    value="{{ old('name') }}"
+                                    placeholder="Enter first name"
+                                    value="{{ old('first_name') }}"
+                                    required
+                                >
+
+                            </div>
+
+                            <!-- LAST NAME -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Last Name
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="last_name"
+                                    class="form-control"
+                                    placeholder="Enter last name"
+                                    value="{{ old('last_name') }}"
+                                    required
+                                >
+
+                            </div>
+
+                            <!-- GENDER -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    Gender
+                                </label>
+
+                                <select
+                                    name="gender"
+                                    class="form-select"
+                                    required
+                                >
+                                    <option value="">Select Gender</option>
+                                    <option value="Male" {{ old('gender') == 'Male' ? 'selected' : '' }}>Male</option>
+                                    <option value="Female" {{ old('gender') == 'Female' ? 'selected' : '' }}>Female</option>
+                                </select>
+
+                            </div>
+
+                            <!-- NIC -->
+                            <div class="mb-3">
+
+                                <label class="form-label">
+                                    NIC
+                                </label>
+
+                                <input
+                                    type="text"
+                                    name="nic"
+                                    class="form-control"
+                                    placeholder="Enter NIC number"
+                                    value="{{ old('nic') }}"
                                     required
                                 >
 
@@ -880,7 +1063,7 @@
                         <!-- STUDENT TABLE -->
                         <div class="table-responsive student-table">
 
-                            <table class="table align-middle">
+                            <table id="studentTable" class="table align-middle">
 
                                 <thead>
 
@@ -889,6 +1072,7 @@
                                     <th>Image</th>
                                     <th>Reg No</th>
                                     <th>Name</th>
+                                    <th>Gender</th>
                                     <th>DOB</th>
                                     <th>Email</th>
                                     <th>Phone</th>
@@ -942,6 +1126,13 @@
                                             {{ $student->name }}
                                         </td>
 
+
+                                        <!-- GENDER -->
+                                        <td>
+                                            <span class="subject-badge">
+                                                {{ $student->gender }}
+                                            </span>
+                                        </td>
 
                                         <!-- DOB -->
                                         <td>
@@ -1006,7 +1197,7 @@
                                     <tr>
 
                                         <td
-                                            colspan="7"
+                                            colspan="8"
                                             class="text-center empty-state">
 
                                             <i class="bi bi-people fs-1 d-block mb-2"></i>
@@ -1055,6 +1246,43 @@
         });
     </script>
 
+    <!-- DataTables -->
+    <link rel="stylesheet"
+          href="https://cdn.datatables.net/1.13.8/css/jquery.dataTables.min.css">
+
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <script src="https://cdn.datatables.net/1.13.8/js/jquery.dataTables.min.js"></script>
+
+    <script>
+        $(document).ready(function () {
+
+            $('#studentTable').DataTable({
+
+                paging: true,
+
+                ordering: true,
+
+                searching: false,
+
+                pageLength: 10,
+
+                lengthMenu: [5, 10, 25, 50, 100],
+
+                columnDefs: [
+                    {
+                        targets: -1,
+                        orderable: false
+                    }
+                ]
+
+            });
+
+        });
+    </script>
+
+    ```
+
 @endsection
 
-```
+````

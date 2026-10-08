@@ -409,10 +409,20 @@
 
                                 <input
                                     type="text"
+                                    id="studentRegNo"
                                     name="student_reg_no"
                                     class="form-control"
-                                    value="{{ old('student_reg_no') }}"
+                                    value="{{ old('student_reg_no', old('reg_no')) }}"
+                                    placeholder="Enter student register number"
                                     required
+                                    oninput="document.getElementById('regNoHidden').value = this.value"
+                                >
+
+                                <input
+                                    type="hidden"
+                                    id="regNoHidden"
+                                    name="reg_no"
+                                    value="{{ old('reg_no', old('student_reg_no')) }}"
                                 >
                             </div>
 

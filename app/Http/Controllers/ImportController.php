@@ -25,29 +25,71 @@ class ImportController extends Controller
 
         while (($row = fgetcsv($file)) !== false) {
 
-            if (count($row) < 7) {
-                continue;
+            /*
+             * NEW student CSV format:
+             * Reg No, First Name, Last Name, Gender, NIC,
+             * Email, Phone, DOB, Password, Address
+             */
+            if (count($row) >= 10) {
+
+                $regNo = trim($row[0]);
+
+                if (Student::where('reg_no', $regNo)->exists()) {
+                    $skipped++;
+                    continue;
+                }
+
+                $firstName = trim($row[1]);
+                $lastName = trim($row[2]);
+
+                Student::create([
+                    'reg_no' => $regNo,
+                    'name' => trim($firstName . ' ' . $lastName),
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'gender' => trim($row[3]),
+                    'nic' => trim($row[4]),
+                    'email' => trim($row[5]),
+                    'phone' => trim($row[6]),
+                    'dob' => trim($row[7]),
+                    'password' => Hash::make($row[8]),
+                    'address' => trim($row[9]),
+                ]);
+
+                $imported++;
             }
 
-            $regNo = trim($row[0]);
+            /*
+             * OLD student CSV format:
+             * Reg No, Name, Email, Phone, DOB, Password, Address
+             */
+            elseif (count($row) >= 7) {
 
-            // Skip if Reg No already exists
-            if (Student::where('reg_no', $regNo)->exists()) {
-                $skipped++;
-                continue;
+                $regNo = trim($row[0]);
+
+                if (Student::where('reg_no', $regNo)->exists()) {
+                    $skipped++;
+                    continue;
+                }
+
+                $fullName = trim($row[1]);
+
+                Student::create([
+                    'reg_no' => $regNo,
+                    'name' => $fullName,
+                    'first_name' => $fullName,
+                    'last_name' => null,
+                    'gender' => null,
+                    'nic' => null,
+                    'email' => trim($row[2]),
+                    'phone' => trim($row[3]),
+                    'dob' => trim($row[4]),
+                    'password' => Hash::make($row[5]),
+                    'address' => trim($row[6]),
+                ]);
+
+                $imported++;
             }
-
-            Student::create([
-                'reg_no' => $regNo,
-                'name' => trim($row[1]),
-                'email' => trim($row[2]),
-                'phone' => trim($row[3]),
-                'dob' => trim($row[4]),
-                'password' => Hash::make($row[5]),
-                'address' => trim($row[6]),
-            ]);
-
-            $imported++;
         }
 
         fclose($file);
@@ -68,28 +110,57 @@ class ImportController extends Controller
 
         $file = fopen($request->file('file')->getRealPath(), 'r');
 
-
+        // Skip header row
         fgetcsv($file);
+
+        $imported = 0;
 
         while (($row = fgetcsv($file)) !== false) {
 
-            if (count($row) < 5) {
-                continue;
+            /*
+             * NEW teacher CSV format:
+             * Name, Email, Phone, Gender, Subject, Address
+             */
+            if (count($row) >= 6) {
+
+                Teacher::create([
+                    'name' => trim($row[0]),
+                    'email' => trim($row[1]),
+                    'phone' => trim($row[2]),
+                    'gender' => trim($row[3]),
+                    'subject' => trim($row[4]),
+                    'address' => trim($row[5]),
+                ]);
+
+                $imported++;
             }
 
-            Teacher::create([
-                'name' => $row[0],
-                'email' => $row[1],
-                'phone' => $row[2],
-                'subject' => $row[3],
-                'address' => $row[4],
-            ]);
+            /*
+             * OLD teacher CSV format:
+             * Name, Email, Phone, Subject, Address
+             */
+            elseif (count($row) >= 5) {
+
+                Teacher::create([
+                    'name' => trim($row[0]),
+                    'email' => trim($row[1]),
+                    'phone' => trim($row[2]),
+                    'gender' => null,
+                    'subject' => trim($row[3]),
+                    'address' => trim($row[4]),
+                ]);
+
+                $imported++;
+            }
         }
 
         fclose($file);
 
         return redirect()
             ->route('teachers.index')
-            ->with('success', 'Teachers imported successfully!');
+            ->with(
+                'success',
+                "$imported teachers imported successfully!"
+            );
     }
 }

@@ -13,6 +13,8 @@ class Teacher extends Model
         'name',
         'email',
         'phone',
+        'gender',
+        'image',
         'subject',
         'address',
     ];

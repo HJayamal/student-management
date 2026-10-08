@@ -18,6 +18,7 @@ class SubjectController extends Controller
     {
         $request->validate([
             'subject_code' => 'required|unique:subjects,subject_code',
+            'course_name' => 'required',
             'subject_name' => 'required',
             'teacher' => 'required',
             'description' => 'nullable',
@@ -25,6 +26,7 @@ class SubjectController extends Controller
 
         Subject::create([
             'subject_code' => $request->subject_code,
+            'course_name' => $request->course_name,
             'subject_name' => $request->subject_name,
             'teacher' => $request->teacher,
             'description' => $request->description,
@@ -44,6 +46,7 @@ class SubjectController extends Controller
     {
         $request->validate([
             'subject_code' => 'required|unique:subjects,subject_code,' . $subject->id,
+            'course_name' => 'required',
             'subject_name' => 'required',
             'teacher' => 'required',
             'description' => 'nullable',
@@ -51,6 +54,7 @@ class SubjectController extends Controller
 
         $subject->update([
             'subject_code' => $request->subject_code,
+            'course_name' => $request->course_name,
             'subject_name' => $request->subject_name,
             'teacher' => $request->teacher,
             'description' => $request->description,
