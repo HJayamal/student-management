@@ -7,11 +7,9 @@ use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\SubjectController;
 use App\Http\Controllers\ExamController;
 use App\Http\Controllers\LoginController;
-use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ImportController;
-
-
+use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [LoginController::class, 'login'])
     ->name('login');
@@ -22,22 +20,22 @@ Route::post('/login-check', [LoginController::class, 'loginCheck'])
 Route::get('/logout', [LoginController::class, 'logout'])
     ->name('logout');
 
-
-
-
 Route::view('/about', 'about')
     ->name('about');
 
 Route::view('/contact', 'contact')
     ->name('contact');
 
-
-
-
 Route::middleware('student.auth')->group(function () {
 
     Route::get('/', [AdminController::class, 'dashboard'])
         ->name('home');
+
+    // Livewire Student Management Demo
+    Route::view(
+        '/students-livewire-demo',
+        'students.livewire-demo'
+    )->name('students.livewire-demo');
 
     Route::resource('students', StudentController::class)
         ->except(['show']);
