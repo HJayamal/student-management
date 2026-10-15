@@ -3,6 +3,7 @@
 namespace App\Livewire;
 
 use App\Models\Student;
+use Illuminate\Support\Facades\Storage;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Livewire\WithPagination;
@@ -30,14 +31,23 @@ class StudentListTable extends Component
 
     public function sortBy(string $field): void
     {
-        $allowedFields = ['reg_no', 'name', 'gender', 'nic', 'dob', 'email', 'phone'];
+        $allowedFields = [
+            'reg_no',
+            'name',
+            'gender',
+            'nic',
+            'dob',
+            'email',
+            'phone',
+        ];
 
         if (! in_array($field, $allowedFields, true)) {
             return;
         }
 
         if ($this->sortField === $field) {
-            $this->sortDirection = $this->sortDirection === 'asc' ? 'desc' : 'asc';
+            $this->sortDirection =
+                $this->sortDirection === 'asc' ? 'desc' : 'asc';
         } else {
             $this->sortField = $field;
             $this->sortDirection = 'asc';
@@ -50,6 +60,27 @@ class StudentListTable extends Component
     public function refreshStudents(): void
     {
         $this->resetPage();
+    }
+
+    public function delete(int $id): void
+    {
+        $student = Student::findOrFail($id);
+
+        $imagePath = $student->image;
+
+
+        $student->delete();
+
+        if ($imagePath) {
+            Storage::disk('public')->delete($imagePath);
+        }
+
+        $this->resetPage();
+
+        session()->flash(
+            'success',
+            'Student deleted successfully.'
+        );
     }
 
     public function render()
