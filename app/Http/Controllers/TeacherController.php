@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\Teacher;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class TeacherController extends Controller
 {
@@ -16,13 +18,14 @@ class TeacherController extends Controller
 
     public function store(Request $request)
     {
-        $request->validate([
-            'name' => 'required',
-            'email' => 'required|email',
-            'phone' => 'required',
-            'gender' => 'required',
-            'subject' => 'required',
-            'address' => 'required',
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|email|max:255|unique:teachers,email',
+            'password' => 'required|string|min:8|max:255',
+            'phone' => 'required|string|max:50',
+            'gender' => 'required|string|max:20',
+            'subject' => 'required|string|max:255',
+            'address' => 'required|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
@@ -34,18 +37,19 @@ class TeacherController extends Controller
         }
 
         Teacher::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'gender' => $request->gender,
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'password' => Hash::make($validated['password']),
+            'phone' => $validated['phone'],
+            'gender' => $validated['gender'],
             'image' => $imagePath,
-            'subject' => $request->subject,
-            'address' => $request->address,
+            'subject' => $validated['subject'],
+            'address' => $validated['address'],
         ]);
 
         return redirect()
             ->route('teachers.index')
-            ->with('success', 'Teacher added successfully!');
+            ->with('success', 'Teacher account created successfully!');
     }
 
     public function edit(Teacher $teacher)
@@ -55,24 +59,34 @@ class TeacherController extends Controller
 
     public function update(Request $request, Teacher $teacher)
     {
-        $request->validate([
-            'name' => 'required',
-            'email' => 'required|email',
-            'phone' => 'required',
-            'gender' => 'required',
-            'subject' => 'required',
-            'address' => 'required',
+        $validated = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => [
+                'required',
+                'email',
+                'max:255',
+                Rule::unique('teachers', 'email')->ignore($teacher->id),
+            ],
+            'password' => 'nullable|string|min:8|max:255',
+            'phone' => 'required|string|max:50',
+            'gender' => 'required|string|max:20',
+            'subject' => 'required|string|max:255',
+            'address' => 'required|string',
             'image' => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
         ]);
 
         $data = [
-            'name' => $request->name,
-            'email' => $request->email,
-            'phone' => $request->phone,
-            'gender' => $request->gender,
-            'subject' => $request->subject,
-            'address' => $request->address,
+            'name' => $validated['name'],
+            'email' => $validated['email'],
+            'phone' => $validated['phone'],
+            'gender' => $validated['gender'],
+            'subject' => $validated['subject'],
+            'address' => $validated['address'],
         ];
+
+        if ($request->filled('password')) {
+            $data['password'] = Hash::make($validated['password']);
+        }
 
         if ($request->hasFile('image')) {
             $data['image'] = $request->file('image')

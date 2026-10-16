@@ -583,6 +583,29 @@
 
                             </div>
 
+                            <!-- PASSWORD -->
+
+                            <div class="mb-3">
+                                <label class="form-label" for="teacher-password">
+                                    Initial Password
+                                </label>
+
+                                <input
+                                    type="password"
+                                    id="teacher-password"
+                                    name="password"
+                                    class="form-control"
+                                    placeholder="Create a password (minimum 8 characters)"
+                                    minlength="8"
+                                    autocomplete="new-password"
+                                    required
+                                >
+
+                                <small class="text-muted">
+                                    Give this password securely to the teacher.
+                                </small>
+                            </div>
+
 
                             <!-- PHONE -->
 
