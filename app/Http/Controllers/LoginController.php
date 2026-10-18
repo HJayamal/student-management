@@ -28,20 +28,28 @@ class LoginController extends Controller
 
         if ($student && Hash::check($request->password, $student->password)) {
 
+            $request->session()->regenerate();
+
             session([
                 'student_id' => $student->id,
                 'student_name' => $student->name,
+                'student_role' => $student->role ?? 'student',
             ]);
 
             return redirect()->route('home');
         }
 
-        return back()->with('error', 'Invalid email or password.');
+        return back()
+            ->withInput($request->only('email'))
+            ->with('error', 'Invalid email or password.');
     }
 
     public function logout()
     {
         session()->flush();
+
+        request()->session()->invalidate();
+        request()->session()->regenerateToken();
 
         return redirect()->route('login');
     }

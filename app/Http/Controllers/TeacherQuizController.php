@@ -9,9 +9,6 @@ use Illuminate\Support\Facades\DB;
 
 class TeacherQuizController extends Controller
 {
-    /**
-     * Get quizzes created by the logged-in teacher.
-     */
     public function index(Request $request): JsonResponse
     {
         $teacher = $request->user();
@@ -39,9 +36,6 @@ class TeacherQuizController extends Controller
         ]);
     }
 
-    /**
-     * Create a quiz and save its questions.
-     */
     public function store(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -50,7 +44,6 @@ class TeacherQuizController extends Controller
             'subject' => 'required|string|max:100',
             'description' => 'nullable|string',
             'duration_minutes' => 'required|integer|min:1|max:300',
-
             'questions' => 'required|array|min:1',
             'questions.*.question_text' => 'required|string',
             'questions.*.option_a' => 'required|string',
@@ -103,14 +96,98 @@ class TeacherQuizController extends Controller
         ], 201);
     }
 
-    /**
-     * Publish a draft quiz owned by the logged-in teacher.
-     */
+    public function show(Request $request, int $id): JsonResponse
+    {
+        $quiz = Quiz::where('teacher_id', $request->user()->id)
+            ->with(['questions' => function ($query) {
+                $query->orderBy('sort_order');
+            }])
+            ->findOrFail($id);
+
+        return response()->json([
+            'message' => 'Quiz details retrieved successfully.',
+            'quiz' => $quiz,
+        ]);
+    }
+
+    public function update(Request $request, int $id): JsonResponse
+    {
+        $quiz = Quiz::where('teacher_id', $request->user()->id)
+            ->findOrFail($id);
+
+        if ($quiz->status !== 'draft') {
+            return response()->json([
+                'message' => 'Only draft quizzes can be edited.',
+            ], 422);
+        }
+
+        $validated = $request->validate([
+            'title' => 'required|string|max:255',
+            'grade' => 'required|integer|min:1|max:13',
+            'subject' => 'required|string|max:100',
+            'description' => 'nullable|string',
+            'duration_minutes' => 'required|integer|min:1|max:300',
+            'questions' => 'required|array|min:1',
+            'questions.*.question_text' => 'required|string',
+            'questions.*.option_a' => 'required|string',
+            'questions.*.option_b' => 'required|string',
+            'questions.*.option_c' => 'required|string',
+            'questions.*.option_d' => 'required|string',
+            'questions.*.correct_option' => 'required|in:A,B,C,D',
+            'questions.*.marks' => 'required|integer|min:1|max:100',
+        ]);
+
+        DB::transaction(function () use ($quiz, $validated) {
+            $quiz->update([
+                'title' => $validated['title'],
+                'grade' => $validated['grade'],
+                'subject' => $validated['subject'],
+                'description' => $validated['description'] ?? null,
+                'duration_minutes' => $validated['duration_minutes'],
+            ]);
+
+            $quiz->questions()->delete();
+
+            foreach ($validated['questions'] as $index => $question) {
+                $quiz->questions()->create([
+                    'question_text' => $question['question_text'],
+                    'option_a' => $question['option_a'],
+                    'option_b' => $question['option_b'],
+                    'option_c' => $question['option_c'],
+                    'option_d' => $question['option_d'],
+                    'correct_option' => $question['correct_option'],
+                    'marks' => $question['marks'],
+                    'sort_order' => $index + 1,
+                ]);
+            }
+        });
+
+        return response()->json([
+            'message' => 'Draft quiz updated successfully.',
+        ]);
+    }
+
+    public function destroy(Request $request, int $id): JsonResponse
+    {
+        $quiz = Quiz::where('teacher_id', $request->user()->id)
+            ->findOrFail($id);
+
+        if ($quiz->status !== 'draft') {
+            return response()->json([
+                'message' => 'Only draft quizzes can be deleted.',
+            ], 422);
+        }
+
+        $quiz->delete();
+
+        return response()->json([
+            'message' => 'Draft quiz deleted successfully.',
+        ]);
+    }
+
     public function publish(Request $request, int $id): JsonResponse
     {
-        $teacher = $request->user();
-
-        $quiz = Quiz::where('teacher_id', $teacher->id)
+        $quiz = Quiz::where('teacher_id', $request->user()->id)
             ->findOrFail($id);
 
         if ($quiz->status !== 'draft') {

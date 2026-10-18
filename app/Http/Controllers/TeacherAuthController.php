@@ -49,4 +49,17 @@ class TeacherAuthController extends Controller
             ],
         ]);
     }
+
+    public function logout(Request $request): JsonResponse
+    {
+        $token = $request->user()->currentAccessToken();
+
+        if ($token) {
+            $token->delete();
+        }
+
+        return response()->json([
+            'message' => 'Teacher logged out successfully.',
+        ]);
+    }
 }

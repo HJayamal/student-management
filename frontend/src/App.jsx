@@ -41,6 +41,10 @@ function App() {
 
     const [quizForm, setQuizForm] = useState(initialQuiz);
     const [questions, setQuestions] = useState([emptyQuestion()]);
+    const [editingQuizId, setEditingQuizId] = useState(null);
+    const [previewQuiz, setPreviewQuiz] = useState(null);
+    const [previewLoading, setPreviewLoading] = useState(false);
+    const [deletingQuizId, setDeletingQuizId] = useState(null);
 
     useEffect(() => {
         if (!teacher || !localStorage.getItem("teacher_token")) return;
@@ -137,12 +141,108 @@ function App() {
 
             setNotice(response.data.message);
 
+            if (previewQuiz?.id === quiz.id) {
+                setPreviewQuiz((current) => current ? {
+                    ...current,
+                    status: response.data.quiz?.status || "published",
+                    published_at: response.data.quiz?.published_at || current.published_at,
+                } : current);
+            }
+
             const quizzesResponse = await api.get("/teacher/quizzes");
             setQuizzes(quizzesResponse.data.quizzes || []);
         } catch (err) {
             setError(
                 err.response?.data?.message || "Unable to publish this quiz."
             );
+        }
+    };
+
+    const handlePreviewQuiz = async (quiz) => {
+        setError("");
+        setNotice("");
+        setPreviewLoading(true);
+
+        try {
+            const response = await api.get(`/teacher/quizzes/${quiz.id}`);
+            setPreviewQuiz(response.data.quiz);
+            setView("preview");
+        } catch (err) {
+            setError(
+                err.response?.data?.message || "Unable to load quiz details."
+            );
+        } finally {
+            setPreviewLoading(false);
+        }
+    };
+
+    const handleEditQuiz = async (quiz) => {
+        if (quiz.status !== "draft") {
+            setError("Only draft quizzes can be edited.");
+            return;
+        }
+
+        setError("");
+        setNotice("");
+
+        try {
+            const response = await api.get(`/teacher/quizzes/${quiz.id}`);
+            const data = response.data.quiz;
+
+            setQuizForm({
+                title: data.title,
+                grade: String(data.grade),
+                subject: data.subject,
+                description: data.description || "",
+                duration_minutes: String(data.duration_minutes),
+            });
+
+            setQuestions(
+                (data.questions || []).map((question) => ({
+                    question_text: question.question_text,
+                    option_a: question.option_a,
+                    option_b: question.option_b,
+                    option_c: question.option_c,
+                    option_d: question.option_d,
+                    correct_option: question.correct_option,
+                    marks: String(question.marks),
+                }))
+            );
+
+            setEditingQuizId(data.id);
+            setView("create");
+        } catch (err) {
+            setError(
+                err.response?.data?.message || "Unable to load quiz for editing."
+            );
+        }
+    };
+
+    const handleDeleteQuiz = async (quiz) => {
+        if (
+            !window.confirm(
+                `Are you sure you want to delete "${quiz.title}"?`
+            )
+        ) {
+            return;
+        }
+
+        setError("");
+        setNotice("");
+        setDeletingQuizId(quiz.id);
+
+        try {
+            const response = await api.delete(`/teacher/quizzes/${quiz.id}`);
+
+            const quizzesResponse = await api.get("/teacher/quizzes");
+            setQuizzes(quizzesResponse.data.quizzes || []);
+            setNotice(response.data.message);
+        } catch (err) {
+            setError(
+                err.response?.data?.message || "Unable to delete this quiz."
+            );
+        } finally {
+            setDeletingQuizId(null);
         }
     };
 
@@ -181,6 +281,8 @@ function App() {
         setNotice("");
         setSavingQuiz(true);
 
+        const isEditing = editingQuizId !== null;
+
         const payload = {
             ...quizForm,
             grade: Number(quizForm.grade),
@@ -192,17 +294,28 @@ function App() {
         };
 
         try {
-            const response = await api.post("/teacher/quizzes", payload);
+            const response = isEditing
+                ? await api.put(`/teacher/quizzes/${editingQuizId}`, payload)
+                : await api.post("/teacher/quizzes", payload);
 
-            setNotice(response.data.message);
+            setNotice(
+                response.data.message ||
+                (isEditing
+                    ? "Quiz updated successfully."
+                    : "Quiz created successfully.")
+            );
+
             setQuizForm(initialQuiz());
             setQuestions([emptyQuestion()]);
+            setEditingQuizId(null);
 
             const quizzesResponse = await api.get("/teacher/quizzes");
             setQuizzes(quizzesResponse.data.quizzes || []);
+
             setView("quizzes");
         } catch (err) {
             const validationErrors = err.response?.data?.errors;
+
             const firstValidationError = validationErrors
                 ? Object.values(validationErrors).flat()[0]
                 : null;
@@ -210,24 +323,32 @@ function App() {
             setError(
                 firstValidationError ||
                 err.response?.data?.message ||
-                "Unable to create quiz. Please try again."
+                "Unable to save quiz. Please try again."
             );
         } finally {
             setSavingQuiz(false);
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem("teacher_token");
-        localStorage.removeItem("teacher_info");
+    const handleLogout = async () => {
+        try {
+            // Revoke the current token on the Laravel backend
+            await api.post("/teacher/logout");
+        } catch (err) {
+            console.error("Teacher logout request failed:", err);
+        } finally {
+            // Clear local session even if the request fails
+            localStorage.removeItem("teacher_token");
+            localStorage.removeItem("teacher_info");
 
-        setTeacher(null);
-        setQuizzes([]);
-        setView("dashboard");
-        setEmail("");
-        setPassword("");
-        setError("");
-        setNotice("");
+            setTeacher(null);
+            setQuizzes([]);
+            setView("dashboard");
+            setEmail("");
+            setPassword("");
+            setError("");
+            setNotice("");
+        }
     };
 
     const publishedCount = quizzes.filter(
@@ -349,7 +470,7 @@ function App() {
                 </button>
 
                 <button
-                    className={`nav-item ${view === "quizzes" ? "active" : ""}`}
+                    className={`nav-item ${view === "quizzes" || view === "preview" ? "active" : ""}`}
                     onClick={() => {
                         setView("quizzes");
                         setError("");
@@ -362,6 +483,10 @@ function App() {
                 <button
                     className={`nav-item ${view === "create" ? "active" : ""}`}
                     onClick={() => {
+                        setQuizForm(initialQuiz());
+                        setQuestions([emptyQuestion()]);
+                        setEditingQuizId(null);
+                        setPreviewQuiz(null);
                         setView("create");
                         setError("");
                         setNotice("");
@@ -395,15 +520,21 @@ function App() {
                             {view === "dashboard"
                                 ? "Dashboard"
                                 : view === "create"
-                                    ? "Create Quiz"
-                                    : "My Quizzes"}
+                                    ? (editingQuizId !== null ? "Edit Quiz" : "Create Quiz")
+                                    : view === "preview"
+                                        ? "Quiz Preview"
+                                        : "My Quizzes"}
                         </h1>
                         <p className="header-subtitle">
                             {view === "dashboard"
                                 ? "Here is an overview of your quiz activity."
                                 : view === "create"
-                                    ? "Build a new quiz for your students."
-                                    : "Manage your quizzes and publication status."}
+                                    ? (editingQuizId !== null
+                                        ? "Update your draft quiz and its questions."
+                                        : "Build a new quiz for your students.")
+                                    : view === "preview"
+                                        ? "Review the quiz details and questions before using it."
+                                        : "Manage your quizzes and publication status."}
                         </p>
                     </div>
 
@@ -430,7 +561,7 @@ function App() {
                     </div>
                 )}
 
-                {view !== "create" && (
+                {view !== "create" && view !== "preview" && (
                     <section className="stats-grid">
                         <article className="stat-card">
                             <div className="stat-icon purple">▤</div>
@@ -466,7 +597,7 @@ function App() {
                     <section className="content-card quiz-builder">
                         <div className="content-card-header">
                             <div>
-                                <h2>Quiz information</h2>
+                                <h2>{editingQuizId !== null ? "Edit quiz information" : "Quiz information"}</h2>
                                 <p>Complete the details and add your questions.</p>
                             </div>
                         </div>
@@ -674,7 +805,10 @@ function App() {
                                     type="button"
                                     className="cancel-button"
                                     onClick={() => {
-                                        setView("dashboard");
+                                        setView(editingQuizId !== null ? "quizzes" : "dashboard");
+                                        setQuizForm(initialQuiz());
+                                        setQuestions([emptyQuestion()]);
+                                        setEditingQuizId(null);
                                         setError("");
                                         setNotice("");
                                     }}
@@ -687,10 +821,111 @@ function App() {
                                     className="primary-action-button"
                                     disabled={savingQuiz}
                                 >
-                                    {savingQuiz ? "Saving quiz..." : "Save as draft"}
+                                    {savingQuiz
+                                        ? (editingQuizId !== null ? "Updating quiz..." : "Saving quiz...")
+                                        : (editingQuizId !== null ? "Update draft" : "Save as draft")}
                                 </button>
                             </div>
                         </form>
+                    </section>
+                ) : view === "preview" ? (
+                    <section className="content-card quiz-preview-card">
+                        <div className="content-card-header">
+                            <div>
+                                <h2>{previewQuiz?.title || "Quiz preview"}</h2>
+                                <p>Review the details and multiple-choice questions.</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="text-button"
+                                onClick={() => {
+                                    setView("quizzes");
+                                    setPreviewQuiz(null);
+                                    setError("");
+                                    setNotice("");
+                                }}
+                            >
+                                Back to quizzes
+                            </button>
+                        </div>
+
+                        {previewLoading ? (
+                            <div className="empty-state">Loading quiz preview...</div>
+                        ) : !previewQuiz ? (
+                            <div className="empty-state">
+                                <h3>Quiz details unavailable</h3>
+                                <p>Choose a quiz from My Quizzes to preview it.</p>
+                            </div>
+                        ) : (
+                            <div className="quiz-preview-content">
+                                <div className="quiz-preview-summary">
+                                    <div><span>Grade</span><strong>Grade {previewQuiz.grade}</strong></div>
+                                    <div><span>Subject</span><strong>{previewQuiz.subject}</strong></div>
+                                    <div><span>Duration</span><strong>{previewQuiz.duration_minutes} minutes</strong></div>
+                                    <div><span>Status</span><strong className={`preview-status ${previewQuiz.status === "published" ? "is-published" : "is-draft"}`}>{previewQuiz.status}</strong></div>
+                                </div>
+
+                                {previewQuiz.description && (
+                                    <p className="quiz-preview-description">{previewQuiz.description}</p>
+                                )}
+
+                                <div className="preview-questions-heading">
+                                    <h3>Questions</h3>
+                                    <span>{previewQuiz.questions?.length || 0} questions</span>
+                                </div>
+
+                                {previewQuiz.questions?.length ? (
+                                    <div className="preview-question-list">
+                                        {previewQuiz.questions.map((question, index) => (
+                                            <article className="preview-question" key={question.id || index}>
+                                                <div className="preview-question-title">
+                                                    <strong>Question {index + 1}</strong>
+                                                    <span>{question.marks} {Number(question.marks) === 1 ? "mark" : "marks"}</span>
+                                                </div>
+                                                <p>{question.question_text}</p>
+                                                <div className="preview-options">
+                                                    {["A", "B", "C", "D"].map((option) => {
+                                                        const optionText = question[`option_${option.toLowerCase()}`];
+                                                        const isCorrect = question.correct_option === option;
+                                                        return (
+                                                            <div
+                                                                key={option}
+                                                                className={`preview-option ${isCorrect ? "correct-option" : ""}`}
+                                                            >
+                                                                <span>{option}</span>
+                                                                <p>{optionText}</p>
+                                                                {isCorrect && <strong className="correct-answer-label">Correct answer</strong>}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            </article>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="empty-state">This quiz has no questions.</div>
+                                )}
+
+                                {previewQuiz.status === "draft" && (
+                                    <div className="preview-actions">
+                                        <button
+                                            type="button"
+                                            className="cancel-button"
+                                            onClick={() => handleEditQuiz(previewQuiz)}
+                                        >
+                                            Edit draft
+                                        </button>
+                                        <button
+                                            type="button"
+                                            className="primary-action-button"
+                                            onClick={() => handlePublish(previewQuiz)}
+                                        >
+                                            Publish quiz
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
+                        )}
                     </section>
                 ) : (
                     <section className="content-card">
@@ -761,18 +996,45 @@ function App() {
                           </span>
                                             </td>
                                             <td>
-                                                {quiz.status === "draft" ? (
+                                                <div className="quiz-row-actions">
                                                     <button
-                                                        className="publish-button"
-                                                        onClick={() => handlePublish(quiz)}
+                                                        type="button"
+                                                        className="publish-button preview-button"
+                                                        onClick={() => handlePreviewQuiz(quiz)}
+                                                        disabled={previewLoading}
                                                     >
-                                                        Publish
+                                                        {previewLoading ? "Loading..." : "Preview"}
                                                     </button>
-                                                ) : (
-                                                    <span className="published-label">
-                              ✓ Published
-                            </span>
-                                                )}
+
+                                                    {quiz.status === "draft" ? (
+                                                        <>
+                                                            <button
+                                                                type="button"
+                                                                className="publish-button edit-button"
+                                                                onClick={() => handleEditQuiz(quiz)}
+                                                            >
+                                                                Edit
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="publish-button delete-button"
+                                                                onClick={() => handleDeleteQuiz(quiz)}
+                                                                disabled={deletingQuizId === quiz.id}
+                                                            >
+                                                                {deletingQuizId === quiz.id ? "Deleting..." : "Delete"}
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                className="publish-button"
+                                                                onClick={() => handlePublish(quiz)}
+                                                            >
+                                                                Publish
+                                                            </button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="published-label">✓ Published</span>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
@@ -792,3 +1054,4 @@ function App() {
 }
 
 export default App;
+

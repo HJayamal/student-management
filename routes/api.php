@@ -13,6 +13,7 @@ use App\Http\Controllers\TeacherQuizController;
 |--------------------------------------------------------------------------
 */
 
+// Existing user API
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
@@ -30,22 +31,48 @@ Route::middleware('auth:sanctum')->get(
     [TeacherDashboardController::class, 'index']
 );
 
-// Protected Teacher Quiz APIs
+// Protected Teacher APIs
 Route::middleware('auth:sanctum')->group(function () {
+
+    // Teacher Logout
+    Route::post(
+        '/teacher/logout',
+        [TeacherAuthController::class, 'logout']
+    );
+
+    // List teacher's quizzes
     Route::get(
         '/teacher/quizzes',
         [TeacherQuizController::class, 'index']
     );
 
-
+    // Create a quiz
     Route::post(
         '/teacher/quizzes',
         [TeacherQuizController::class, 'store']
     );
 
+    // Preview one quiz with questions
+    Route::get(
+        '/teacher/quizzes/{id}',
+        [TeacherQuizController::class, 'show']
+    );
+
+    // Edit a draft quiz
+    Route::put(
+        '/teacher/quizzes/{id}',
+        [TeacherQuizController::class, 'update']
+    );
+
+    // Delete a draft quiz
+    Route::delete(
+        '/teacher/quizzes/{id}',
+        [TeacherQuizController::class, 'destroy']
+    );
+
+    // Publish a draft quiz
     Route::post(
         '/teacher/quizzes/{id}/publish',
         [TeacherQuizController::class, 'publish']
     );
-
 });

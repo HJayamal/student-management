@@ -37,33 +37,41 @@ Route::middleware('student.auth')->group(function () {
         'students.livewire-demo'
     )->name('students.livewire-demo');
 
+    // Student Management
     Route::resource('students', StudentController::class)
         ->except(['show']);
 
     Route::get('/students/export-pdf', [ExportController::class, 'studentsPdf'])
         ->name('students.export-pdf');
 
-    Route::get('/teachers/export-pdf', [ExportController::class, 'teachersPdf'])
-        ->name('teachers.export-pdf');
-
     Route::post('/students/import', [ImportController::class, 'students'])
         ->name('students.import');
-
-    Route::post('/teachers/import', [ImportController::class, 'teachers'])
-        ->name('teachers.import');
 
     Route::get('/student-image-list', [StudentController::class, 'imageList'])
         ->name('students.image-list');
 
+    // Admin-only Teacher Management routes
+    Route::middleware('admin.auth')->group(function () {
+
+        Route::get('/teachers/export-pdf', [ExportController::class, 'teachersPdf'])
+            ->name('teachers.export-pdf');
+
+        Route::post('/teachers/import', [ImportController::class, 'teachers'])
+            ->name('teachers.import');
+
+        Route::resource('teachers', TeacherController::class)
+            ->except(['show']);
+    });
+
+    // Admission Management
     Route::resource('admissions', AdmissionController::class)
         ->except(['show']);
 
-    Route::resource('teachers', TeacherController::class)
-        ->except(['show']);
-
+    // Subject Management
     Route::resource('subjects', SubjectController::class)
         ->except(['show']);
 
+    // Exam Management
     Route::resource('exams', ExamController::class)
         ->except(['show']);
 });
