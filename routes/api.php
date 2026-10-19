@@ -2,6 +2,7 @@
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\APIController;
 use App\Http\Controllers\TeacherAuthController;
 use App\Http\Controllers\TeacherDashboardController;
@@ -39,6 +40,14 @@ Route::middleware('auth:sanctum')->group(function () {
         '/teacher/logout',
         [TeacherAuthController::class, 'logout']
     );
+
+    // Get subjects from the existing Subjects table
+    Route::get('/teacher/subjects', function () {
+        return DB::table('subjects')
+            ->select('id', 'subject_name')
+            ->orderBy('subject_name')
+            ->get();
+    });
 
     // List teacher's quizzes
     Route::get(

@@ -37,6 +37,9 @@ function App() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [quizzes, setQuizzes] = useState([]);
+    const [subjects, setSubjects] = useState([]);
+    const [subjectsLoading, setSubjectsLoading] = useState(false);
+    const [subjectsError, setSubjectsError] = useState("");
     const [view, setView] = useState("dashboard");
 
     const [quizForm, setQuizForm] = useState(initialQuiz);
@@ -83,7 +86,32 @@ function App() {
             }
         }
 
+        async function loadSubjects() {
+            setSubjectsLoading(true);
+            setSubjectsError("");
+
+            try {
+                const response = await api.get("/teacher/subjects");
+
+                if (cancelled) return;
+
+                // The API returns a list of subjects from the existing database table.
+                setSubjects(Array.isArray(response.data) ? response.data : []);
+            } catch (err) {
+                if (cancelled) return;
+
+                setSubjects([]);
+                setSubjectsError(
+                    err.response?.data?.message ||
+                    "Unable to load subjects. Please try again."
+                );
+            } finally {
+                if (!cancelled) setSubjectsLoading(false);
+            }
+        }
+
         loadDashboard();
+        loadSubjects();
 
         return () => {
             cancelled = true;
@@ -343,6 +371,9 @@ function App() {
 
             setTeacher(null);
             setQuizzes([]);
+            setSubjects([]);
+            setSubjectsError("");
+            setSubjectsLoading(false);
             setView("dashboard");
             setEmail("");
             setPassword("");
@@ -638,15 +669,50 @@ function App() {
 
                                 <div className="builder-field">
                                     <label htmlFor="quiz-subject">Subject *</label>
-                                    <input
+                                    <select
                                         id="quiz-subject"
                                         name="subject"
                                         value={quizForm.subject}
                                         onChange={handleQuizFieldChange}
-                                        placeholder="e.g. Science"
-                                        maxLength={100}
                                         required
-                                    />
+                                        disabled={subjectsLoading || subjects.length === 0}
+                                    >
+                                        <option value="">
+                                            {subjectsLoading
+                                                ? "Loading subjects..."
+                                                : subjects.length === 0
+                                                    ? "No subjects available"
+                                                    : "Select a subject"}
+                                        </option>
+
+                                        {/* Keep an existing subject selectable when editing an older draft. */}
+                                        {quizForm.subject &&
+                                            !subjects.some(
+                                                (subject) => subject.subject_name === quizForm.subject
+                                            ) && (
+                                                <option value={quizForm.subject}>
+                                                    {quizForm.subject} (current quiz subject)
+                                                </option>
+                                            )}
+
+                                        {subjects.map((subject) => (
+                                            <option key={subject.id} value={subject.subject_name}>
+                                                {subject.subject_name}
+                                            </option>
+                                        ))}
+                                    </select>
+
+                                    {subjectsError && (
+                                        <small className="subject-field-message" role="alert">
+                                            {subjectsError}
+                                        </small>
+                                    )}
+
+                                    {!subjectsLoading && !subjectsError && subjects.length === 0 && (
+                                        <small className="subject-field-message">
+                                            Add subjects in Subject Management before creating a quiz.
+                                        </small>
+                                    )}
                                 </div>
 
                                 <div className="builder-field">
@@ -1054,4 +1120,5 @@ function App() {
 }
 
 export default App;
+
 
