@@ -18,7 +18,36 @@ const initialQuiz = () => ({
     subject: "",
     description: "",
     duration_minutes: 15,
+    available_at: "",
 });
+
+// Convert the saved UTC timestamp into the browser's local datetime-local value.
+const toLocalDateTimeInput = (value) => {
+    if (!value) return "";
+
+    const text = String(value).trim();
+    const normalized = text.includes("T") ? text : text.replace(" ", "T");
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+    const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+    if (Number.isNaN(date.getTime())) return "";
+
+    const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+};
+
+// A published quiz with a future availability time is scheduled, not yet available.
+const isFutureScheduledQuiz = (quiz) => {
+    if (quiz?.status !== "published" || !quiz?.available_at) return false;
+
+    // Treat a timezone-less database timestamp as UTC, matching the form serializer.
+    const value = String(quiz.available_at).trim();
+    const normalized = value.includes("T") ? value : value.replace(" ", "T");
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+    const availableAt = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+    return !Number.isNaN(availableAt.getTime()) && availableAt.getTime() > Date.now();
+};
 
 function App() {
     const [teacher, setTeacher] = useState(() => {
@@ -40,6 +69,7 @@ function App() {
     const [subjects, setSubjects] = useState([]);
     const [subjectsLoading, setSubjectsLoading] = useState(false);
     const [subjectsError, setSubjectsError] = useState("");
+    const [addingSubject, setAddingSubject] = useState(false);
     const [view, setView] = useState("dashboard");
 
     const [quizForm, setQuizForm] = useState(initialQuiz);
@@ -205,8 +235,8 @@ function App() {
     };
 
     const handleEditQuiz = async (quiz) => {
-        if (quiz.status !== "draft") {
-            setError("Only draft quizzes can be edited.");
+        if (quiz.status !== "draft" && !isFutureScheduledQuiz(quiz)) {
+            setError("Only draft or not-yet-available scheduled quizzes can be edited.");
             return;
         }
 
@@ -223,6 +253,7 @@ function App() {
                 subject: data.subject,
                 description: data.description || "",
                 duration_minutes: String(data.duration_minutes),
+                available_at: toLocalDateTimeInput(data.available_at),
             });
 
             setQuestions(
@@ -281,6 +312,99 @@ function App() {
             ...current,
             [name]: value,
         }));
+
+        if (name === "subject") {
+            setSubjectsError("");
+        }
+    };
+
+    const handleAddSubject = async () => {
+        const subjectName = quizForm.subject.trim();
+
+        if (!subjectName) {
+            setSubjectsError("Type a subject name in the Subject field first.");
+            return;
+        }
+
+        const existingSubject = subjects.find(
+            (subject) => subject.subject_name.toLowerCase() === subjectName.toLowerCase()
+        );
+
+        if (existingSubject) {
+            setQuizForm((current) => ({
+                ...current,
+                subject: existingSubject.subject_name,
+            }));
+            setSubjectsError("This subject is already saved in the subject list.");
+            return;
+        }
+
+        setAddingSubject(true);
+        setSubjectsError("");
+
+        try {
+            const response = await api.post("/teacher/subjects", {
+                subject_name: subjectName,
+            });
+
+            const savedSubject = response.data.subject;
+            if (!savedSubject?.id || !savedSubject?.subject_name) {
+                throw new Error("The server did not return the saved subject.");
+            }
+
+            setSubjects((current) => {
+                const alreadyAdded = current.some(
+                    (subject) => subject.subject_name.toLowerCase() === savedSubject.subject_name.toLowerCase()
+                );
+                if (alreadyAdded) return current;
+
+                return [...current, savedSubject].sort((a, b) =>
+                    a.subject_name.localeCompare(b.subject_name)
+                );
+            });
+
+            setQuizForm((current) => ({
+                ...current,
+                subject: savedSubject.subject_name,
+            }));
+            setSubjectsError("");
+            setNotice(response.data.message || "Subject added to the subject list successfully.");
+        } catch (err) {
+            // Refresh the list in case the subject already exists in the database
+            // but was not present in the current frontend state.
+            try {
+                const refreshResponse = await api.get("/teacher/subjects");
+                const latestSubjects = Array.isArray(refreshResponse.data)
+                    ? refreshResponse.data
+                    : [];
+                const existingAfterRefresh = latestSubjects.find(
+                    (subject) => subject.subject_name.toLowerCase() === subjectName.toLowerCase()
+                );
+
+                if (existingAfterRefresh) {
+                    setSubjects(latestSubjects);
+                    setQuizForm((current) => ({
+                        ...current,
+                        subject: existingAfterRefresh.subject_name,
+                    }));
+                    setSubjectsError("");
+                    setNotice("This subject already exists and is now available in the suggestions.");
+                    return;
+                }
+            } catch {
+                // Keep the original API error below.
+            }
+
+            const validationMessage = err.response?.data?.errors?.subject_name?.[0];
+            setSubjectsError(
+                validationMessage ||
+                err.response?.data?.message ||
+                err.message ||
+                "Unable to add this subject. Please try again."
+            );
+        } finally {
+            setAddingSubject(false);
+        }
     };
 
     const handleQuestionChange = (index, field, value) => {
@@ -311,26 +435,85 @@ function App() {
 
         const isEditing = editingQuizId !== null;
 
-        const payload = {
-            ...quizForm,
-            grade: Number(quizForm.grade),
-            duration_minutes: Number(quizForm.duration_minutes),
-            questions: questions.map((question) => ({
-                ...question,
-                marks: Number(question.marks),
-            })),
-        };
-
         try {
+            const typedSubjectName = quizForm.subject.trim();
+            if (!typedSubjectName) {
+                throw new Error("Please enter a subject name.");
+            }
+
+            let subjectName = typedSubjectName;
+            const existingSubject = subjects.find(
+                (subject) => subject.subject_name.toLowerCase() === typedSubjectName.toLowerCase()
+            );
+
+            if (existingSubject) {
+                subjectName = existingSubject.subject_name;
+            } else {
+                // Save a manually typed new subject automatically before saving the quiz.
+                try {
+                    const subjectResponse = await api.post("/teacher/subjects", {
+                        subject_name: typedSubjectName,
+                    });
+                    const savedSubject = subjectResponse.data.subject;
+
+                    if (!savedSubject?.id || !savedSubject?.subject_name) {
+                        throw new Error("The server did not return the saved subject.");
+                    }
+
+                    subjectName = savedSubject.subject_name;
+                    setSubjects((current) => {
+                        const alreadyAdded = current.some(
+                            (subject) => subject.subject_name.toLowerCase() === subjectName.toLowerCase()
+                        );
+                        if (alreadyAdded) return current;
+                        return [...current, savedSubject].sort((a, b) =>
+                            a.subject_name.localeCompare(b.subject_name)
+                        );
+                    });
+                } catch (subjectError) {
+                    // Handle an already-existing subject if the frontend list was stale.
+                    if (subjectError.response?.status !== 422) {
+                        throw subjectError;
+                    }
+
+                    const refreshResponse = await api.get("/teacher/subjects");
+                    const latestSubjects = Array.isArray(refreshResponse.data)
+                        ? refreshResponse.data
+                        : [];
+                    const refreshedSubject = latestSubjects.find(
+                        (subject) => subject.subject_name.toLowerCase() === typedSubjectName.toLowerCase()
+                    );
+
+                    if (!refreshedSubject) {
+                        throw subjectError;
+                    }
+
+                    subjectName = refreshedSubject.subject_name;
+                    setSubjects(latestSubjects);
+                }
+            }
+
+            const payload = {
+                ...quizForm,
+                subject: subjectName,
+                // Convert the selected local time to UTC before sending it to Laravel.
+                available_at: new Date(quizForm.available_at).toISOString(),
+                grade: Number(quizForm.grade),
+                duration_minutes: Number(quizForm.duration_minutes),
+                questions: questions.map((question) => ({
+                    ...question,
+                    marks: Number(question.marks),
+                })),
+            };
+
             const response = isEditing
                 ? await api.put(`/teacher/quizzes/${editingQuizId}`, payload)
                 : await api.post("/teacher/quizzes", payload);
 
             setNotice(
-                response.data.message ||
-                (isEditing
-                    ? "Quiz updated successfully."
-                    : "Quiz created successfully.")
+                isEditing
+                    ? "Quiz schedule updated successfully."
+                    : (response.data.message || "Quiz scheduled successfully.")
             );
 
             setQuizForm(initialQuiz());
@@ -343,7 +526,6 @@ function App() {
             setView("quizzes");
         } catch (err) {
             const validationErrors = err.response?.data?.errors;
-
             const firstValidationError = validationErrors
                 ? Object.values(validationErrors).flat()[0]
                 : null;
@@ -351,6 +533,7 @@ function App() {
             setError(
                 firstValidationError ||
                 err.response?.data?.message ||
+                err.message ||
                 "Unable to save quiz. Please try again."
             );
         } finally {
@@ -383,7 +566,7 @@ function App() {
     };
 
     const publishedCount = quizzes.filter(
-        (quiz) => quiz.status === "published"
+        (quiz) => quiz.status === "published" && !isFutureScheduledQuiz(quiz)
     ).length;
 
     const draftCount = quizzes.filter(
@@ -605,7 +788,7 @@ function App() {
                             <div className="stat-icon green">✓</div>
                             <p>Published</p>
                             <strong>{publishedCount}</strong>
-                            <span>Available to students</span>
+                            <span>Available now</span>
                         </article>
 
                         <article className="stat-card">
@@ -669,48 +852,43 @@ function App() {
 
                                 <div className="builder-field">
                                     <label htmlFor="quiz-subject">Subject *</label>
-                                    <select
+                                    <input
                                         id="quiz-subject"
                                         name="subject"
+                                        type="text"
                                         value={quizForm.subject}
                                         onChange={handleQuizFieldChange}
+                                        list="quiz-subject-suggestions"
+                                        placeholder={subjectsLoading ? "Loading saved subjects..." : "Type a subject, e.g. Mathematics"}
+                                        maxLength={100}
+                                        autoComplete="off"
                                         required
-                                        disabled={subjectsLoading || subjects.length === 0}
-                                    >
-                                        <option value="">
-                                            {subjectsLoading
-                                                ? "Loading subjects..."
-                                                : subjects.length === 0
-                                                    ? "No subjects available"
-                                                    : "Select a subject"}
-                                        </option>
-
-                                        {/* Keep an existing subject selectable when editing an older draft. */}
-                                        {quizForm.subject &&
-                                            !subjects.some(
-                                                (subject) => subject.subject_name === quizForm.subject
-                                            ) && (
-                                                <option value={quizForm.subject}>
-                                                    {quizForm.subject} (current quiz subject)
-                                                </option>
-                                            )}
-
+                                    />
+                                    <datalist id="quiz-subject-suggestions">
                                         {subjects.map((subject) => (
-                                            <option key={subject.id} value={subject.subject_name}>
-                                                {subject.subject_name}
-                                            </option>
+                                            <option key={subject.id} value={subject.subject_name} />
                                         ))}
-                                    </select>
+                                    </datalist>
+                                    <small className="subject-input-hint">
+                                        Type any subject name here. Previously saved subjects appear as suggestions, but you do not have to select one.
+                                    </small>
+
+                                    {quizForm.subject.trim() && !subjects.some(
+                                        (subject) => subject.subject_name.toLowerCase() === quizForm.subject.trim().toLowerCase()
+                                    ) && (
+                                        <button
+                                            type="button"
+                                            className="save-subject-inline-button"
+                                            onClick={handleAddSubject}
+                                            disabled={addingSubject || subjectsLoading}
+                                        >
+                                            {addingSubject ? "Adding subject..." : "＋ Add this subject to the saved list"}
+                                        </button>
+                                    )}
 
                                     {subjectsError && (
                                         <small className="subject-field-message" role="alert">
                                             {subjectsError}
-                                        </small>
-                                    )}
-
-                                    {!subjectsLoading && !subjectsError && subjects.length === 0 && (
-                                        <small className="subject-field-message">
-                                            Add subjects in Subject Management before creating a quiz.
                                         </small>
                                     )}
                                 </div>
@@ -727,6 +905,19 @@ function App() {
                                         onChange={handleQuizFieldChange}
                                         required
                                     />
+                                </div>
+
+                                <div className="builder-field builder-field-full">
+                                    <label htmlFor="quiz-available-at">Available Date &amp; Time *</label>
+                                    <input
+                                        id="quiz-available-at"
+                                        name="available_at"
+                                        type="datetime-local"
+                                        value={quizForm.available_at}
+                                        onChange={handleQuizFieldChange}
+                                        required
+                                    />
+                                    <small>Students can access this quiz from the selected date and time.</small>
                                 </div>
 
                                 <div className="builder-field builder-field-full">
@@ -888,8 +1079,8 @@ function App() {
                                     disabled={savingQuiz}
                                 >
                                     {savingQuiz
-                                        ? (editingQuizId !== null ? "Updating quiz..." : "Saving quiz...")
-                                        : (editingQuizId !== null ? "Update draft" : "Save as draft")}
+                                        ? (editingQuizId !== null ? "Updating schedule..." : "Scheduling quiz...")
+                                        : (editingQuizId !== null ? "Update schedule" : "Schedule Quiz")}
                                 </button>
                             </div>
                         </form>
@@ -928,7 +1119,7 @@ function App() {
                                     <div><span>Grade</span><strong>Grade {previewQuiz.grade}</strong></div>
                                     <div><span>Subject</span><strong>{previewQuiz.subject}</strong></div>
                                     <div><span>Duration</span><strong>{previewQuiz.duration_minutes} minutes</strong></div>
-                                    <div><span>Status</span><strong className={`preview-status ${previewQuiz.status === "published" ? "is-published" : "is-draft"}`}>{previewQuiz.status}</strong></div>
+                                    <div><span>Status</span><strong className={`preview-status ${isFutureScheduledQuiz(previewQuiz) ? "is-scheduled" : previewQuiz.status === "published" ? "is-published" : "is-draft"}`}>{isFutureScheduledQuiz(previewQuiz) ? "scheduled" : previewQuiz.status}</strong></div>
                                 </div>
 
                                 {previewQuiz.description && (
@@ -972,22 +1163,24 @@ function App() {
                                     <div className="empty-state">This quiz has no questions.</div>
                                 )}
 
-                                {previewQuiz.status === "draft" && (
+                                {(previewQuiz.status === "draft" || isFutureScheduledQuiz(previewQuiz)) && (
                                     <div className="preview-actions">
                                         <button
                                             type="button"
                                             className="cancel-button"
                                             onClick={() => handleEditQuiz(previewQuiz)}
                                         >
-                                            Edit draft
+                                            {isFutureScheduledQuiz(previewQuiz) ? "Edit schedule" : "Edit draft"}
                                         </button>
-                                        <button
-                                            type="button"
-                                            className="primary-action-button"
-                                            onClick={() => handlePublish(previewQuiz)}
-                                        >
-                                            Publish quiz
-                                        </button>
+                                        {previewQuiz.status === "draft" && (
+                                            <button
+                                                type="button"
+                                                className="primary-action-button"
+                                                onClick={() => handlePublish(previewQuiz)}
+                                            >
+                                                Publish quiz
+                                            </button>
+                                        )}
                                     </div>
                                 )}
                             </div>
@@ -1053,12 +1246,14 @@ function App() {
                                             <td>
                           <span
                               className={`status-pill ${
-                                  quiz.status === "published"
-                                      ? "published"
-                                      : "draft"
+                                  isFutureScheduledQuiz(quiz)
+                                      ? "scheduled"
+                                      : quiz.status === "published"
+                                          ? "published"
+                                          : "draft"
                               }`}
                           >
-                            {quiz.status}
+                            {isFutureScheduledQuiz(quiz) ? "scheduled" : quiz.status}
                           </span>
                                             </td>
                                             <td>
@@ -1072,14 +1267,14 @@ function App() {
                                                         {previewLoading ? "Loading..." : "Preview"}
                                                     </button>
 
-                                                    {quiz.status === "draft" ? (
+                                                    {quiz.status === "draft" || isFutureScheduledQuiz(quiz) ? (
                                                         <>
                                                             <button
                                                                 type="button"
                                                                 className="publish-button edit-button"
                                                                 onClick={() => handleEditQuiz(quiz)}
                                                             >
-                                                                Edit
+                                                                {isFutureScheduledQuiz(quiz) ? "Edit schedule" : "Edit"}
                                                             </button>
                                                             <button
                                                                 type="button"
@@ -1089,16 +1284,18 @@ function App() {
                                                             >
                                                                 {deletingQuizId === quiz.id ? "Deleting..." : "Delete"}
                                                             </button>
-                                                            <button
-                                                                type="button"
-                                                                className="publish-button"
-                                                                onClick={() => handlePublish(quiz)}
-                                                            >
-                                                                Publish
-                                                            </button>
+                                                            {quiz.status === "draft" && (
+                                                                <button
+                                                                    type="button"
+                                                                    className="publish-button"
+                                                                    onClick={() => handlePublish(quiz)}
+                                                                >
+                                                                    Publish
+                                                                </button>
+                                                            )}
                                                         </>
                                                     ) : (
-                                                        <span className="published-label">✓ Published</span>
+                                                        <span className="published-label">✓ Available</span>
                                                     )}
                                                 </div>
                                             </td>

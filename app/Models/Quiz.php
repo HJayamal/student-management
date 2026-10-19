@@ -18,8 +18,10 @@ class Quiz extends Model
         'subject',
         'description',
         'duration_minutes',
+        'available_at',
         'status',
         'published_at',
+
     ];
 
     protected function casts(): array

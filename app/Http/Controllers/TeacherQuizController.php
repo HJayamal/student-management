@@ -6,15 +6,14 @@ use App\Models\Quiz;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
+use Carbon\Carbon;
 
 class TeacherQuizController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $teacher = $request->user();
-
         $quizzes = Quiz::query()
-            ->where('teacher_id', $teacher->id)
+            ->where('teacher_id', $request->user()->id)
             ->select([
                 'id',
                 'title',
@@ -22,6 +21,7 @@ class TeacherQuizController extends Controller
                 'subject',
                 'description',
                 'duration_minutes',
+                'available_at',
                 'status',
                 'published_at',
                 'created_at',
@@ -44,6 +44,8 @@ class TeacherQuizController extends Controller
             'subject' => 'required|string|max:100',
             'description' => 'nullable|string',
             'duration_minutes' => 'required|integer|min:1|max:300',
+            'available_at' => 'required|date|after:now',
+
             'questions' => 'required|array|min:1',
             'questions.*.question_text' => 'required|string',
             'questions.*.option_a' => 'required|string',
@@ -54,6 +56,10 @@ class TeacherQuizController extends Controller
             'questions.*.marks' => 'required|integer|min:1|max:100',
         ]);
 
+        $validated['available_at'] = Carbon::parse(
+            $validated['available_at']
+        )->format('Y-m-d H:i:s');
+
         $quiz = DB::transaction(function () use ($validated, $request) {
             $quiz = Quiz::create([
                 'teacher_id' => $request->user()->id,
@@ -62,8 +68,9 @@ class TeacherQuizController extends Controller
                 'subject' => $validated['subject'],
                 'description' => $validated['description'] ?? null,
                 'duration_minutes' => $validated['duration_minutes'],
-                'status' => 'draft',
-                'published_at' => null,
+                'available_at' => $validated['available_at'],
+                'status' => 'published',
+                'published_at' => now(),
             ]);
 
             foreach ($validated['questions'] as $index => $question) {
@@ -83,14 +90,16 @@ class TeacherQuizController extends Controller
         });
 
         return response()->json([
-            'message' => 'Quiz saved as draft successfully.',
+            'message' => 'Quiz scheduled successfully.',
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
                 'grade' => $quiz->grade,
                 'subject' => $quiz->subject,
                 'duration_minutes' => $quiz->duration_minutes,
+                'available_at' => $quiz->available_at,
                 'status' => $quiz->status,
+                'published_at' => $quiz->published_at,
                 'questions_count' => count($validated['questions']),
             ],
         ], 201);
@@ -115,9 +124,12 @@ class TeacherQuizController extends Controller
         $quiz = Quiz::where('teacher_id', $request->user()->id)
             ->findOrFail($id);
 
-        if ($quiz->status !== 'draft') {
+        if (
+            $quiz->status !== 'draft'
+            && ! $this->isFutureScheduledQuiz($quiz)
+        ) {
             return response()->json([
-                'message' => 'Only draft quizzes can be edited.',
+                'message' => 'Only draft or not-yet-available scheduled quizzes can be edited.',
             ], 422);
         }
 
@@ -127,6 +139,8 @@ class TeacherQuizController extends Controller
             'subject' => 'required|string|max:100',
             'description' => 'nullable|string',
             'duration_minutes' => 'required|integer|min:1|max:300',
+            'available_at' => 'required|date|after:now',
+
             'questions' => 'required|array|min:1',
             'questions.*.question_text' => 'required|string',
             'questions.*.option_a' => 'required|string',
@@ -137,6 +151,10 @@ class TeacherQuizController extends Controller
             'questions.*.marks' => 'required|integer|min:1|max:100',
         ]);
 
+        $validated['available_at'] = Carbon::parse(
+            $validated['available_at']
+        )->format('Y-m-d H:i:s');
+
         DB::transaction(function () use ($quiz, $validated) {
             $quiz->update([
                 'title' => $validated['title'],
@@ -144,6 +162,7 @@ class TeacherQuizController extends Controller
                 'subject' => $validated['subject'],
                 'description' => $validated['description'] ?? null,
                 'duration_minutes' => $validated['duration_minutes'],
+                'available_at' => $validated['available_at'],
             ]);
 
             $quiz->questions()->delete();
@@ -163,7 +182,7 @@ class TeacherQuizController extends Controller
         });
 
         return response()->json([
-            'message' => 'Draft quiz updated successfully.',
+            'message' => 'Quiz updated successfully.',
         ]);
     }
 
@@ -172,16 +191,19 @@ class TeacherQuizController extends Controller
         $quiz = Quiz::where('teacher_id', $request->user()->id)
             ->findOrFail($id);
 
-        if ($quiz->status !== 'draft') {
+        if (
+            $quiz->status !== 'draft'
+            && ! $this->isFutureScheduledQuiz($quiz)
+        ) {
             return response()->json([
-                'message' => 'Only draft quizzes can be deleted.',
+                'message' => 'Only draft or not-yet-available scheduled quizzes can be deleted.',
             ], 422);
         }
 
         $quiz->delete();
 
         return response()->json([
-            'message' => 'Draft quiz deleted successfully.',
+            'message' => 'Quiz deleted successfully.',
         ]);
     }
 
@@ -203,6 +225,7 @@ class TeacherQuizController extends Controller
         }
 
         $quiz->status = 'published';
+        $quiz->available_at = $quiz->available_at ?? now();
         $quiz->published_at = now();
         $quiz->save();
 
@@ -213,9 +236,17 @@ class TeacherQuizController extends Controller
                 'title' => $quiz->title,
                 'grade' => $quiz->grade,
                 'subject' => $quiz->subject,
+                'available_at' => $quiz->available_at,
                 'status' => $quiz->status,
                 'published_at' => $quiz->published_at,
             ],
         ]);
+    }
+
+    private function isFutureScheduledQuiz(Quiz $quiz): bool
+    {
+        return $quiz->status === 'published'
+            && $quiz->available_at !== null
+            && Carbon::parse($quiz->available_at)->isFuture();
     }
 }

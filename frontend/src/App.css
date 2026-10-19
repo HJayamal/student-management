@@ -522,6 +522,11 @@ button {
     background: #fff2df;
 }
 
+.status-pill.scheduled {
+    color: #315be8;
+    background: #edf1ff;
+}
+
 .publish-button {
     padding: 8px 12px;
     border: 0;
@@ -1434,6 +1439,11 @@ button {
     text-transform: capitalize;
 }
 
+.preview-status.is-scheduled {
+    color: #315be8;
+    background: #edf1ff;
+}
+
 .preview-status.is-published {
     color: #178049;
 }
@@ -1610,3 +1620,90 @@ button {
     }
 }
 
+
+/* Inline subject creation inside the quiz builder */
+.add-subject-inline-form {
+    display: flex;
+    flex-direction: column;
+    gap: 9px;
+    margin-top: 12px;
+    padding: 14px;
+    border: 1px solid #dce3ef;
+    border-radius: 10px;
+    background: #f8faff;
+}
+
+.add-subject-inline-form label {
+    color: #34425a;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.add-subject-inline-form input {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 42px;
+    padding: 11px 12px;
+    border: 1px solid #dce3ef;
+    border-radius: 8px;
+    color: #24334c;
+    background: #fff;
+    font: inherit;
+}
+
+.add-subject-inline-form input:focus {
+    border-color: #315be8;
+    outline: none;
+    box-shadow: 0 0 0 3px #315be81c;
+}
+
+.add-subject-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+
+.add-subject-actions button {
+    min-height: 36px;
+}
+
+.add-subject-actions button:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
+
+
+/* Editable subject input with saved suggestions */
+.subject-input-hint {
+    display: block;
+    margin-top: 7px;
+    color: #77839a;
+    font-size: 11px;
+    line-height: 1.5;
+}
+
+.save-subject-inline-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 9px;
+    min-height: 34px;
+    padding: 7px 11px;
+    border: 1px solid #d7defa;
+    border-radius: 8px;
+    color: #315be8;
+    background: #f1f4ff;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.save-subject-inline-button:hover:not(:disabled) {
+    background: #e7ecff;
+}
+
+.save-subject-inline-button:disabled {
+    opacity: 0.65;
+    cursor: not-allowed;
+}
