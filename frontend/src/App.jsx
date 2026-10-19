@@ -86,8 +86,9 @@ function App() {
     const [subjects, setSubjects] = useState([]);
     const [subjectsLoading, setSubjectsLoading] = useState(false);
     const [subjectsError, setSubjectsError] = useState("");
-    const [addingSubject, setAddingSubject] = useState(false);
     const [view, setView] = useState("dashboard");
+    const [quizSearch, setQuizSearch] = useState("");
+    const [quizStatusFilter, setQuizStatusFilter] = useState("all");
     const [, setClockTick] = useState(0);
 
     // Refresh time-based statuses while the teacher portal remains open.
@@ -345,95 +346,6 @@ function App() {
         }
     };
 
-    const handleAddSubject = async () => {
-        const subjectName = quizForm.subject.trim();
-
-        if (!subjectName) {
-            setSubjectsError("Type a subject name in the Subject field first.");
-            return;
-        }
-
-        const existingSubject = subjects.find(
-            (subject) => subject.subject_name.toLowerCase() === subjectName.toLowerCase()
-        );
-
-        if (existingSubject) {
-            setQuizForm((current) => ({
-                ...current,
-                subject: existingSubject.subject_name,
-            }));
-            setSubjectsError("This subject is already saved in the subject list.");
-            return;
-        }
-
-        setAddingSubject(true);
-        setSubjectsError("");
-
-        try {
-            const response = await api.post("/teacher/subjects", {
-                subject_name: subjectName,
-            });
-
-            const savedSubject = response.data.subject;
-            if (!savedSubject?.id || !savedSubject?.subject_name) {
-                throw new Error("The server did not return the saved subject.");
-            }
-
-            setSubjects((current) => {
-                const alreadyAdded = current.some(
-                    (subject) => subject.subject_name.toLowerCase() === savedSubject.subject_name.toLowerCase()
-                );
-                if (alreadyAdded) return current;
-
-                return [...current, savedSubject].sort((a, b) =>
-                    a.subject_name.localeCompare(b.subject_name)
-                );
-            });
-
-            setQuizForm((current) => ({
-                ...current,
-                subject: savedSubject.subject_name,
-            }));
-            setSubjectsError("");
-            setNotice(response.data.message || "Subject added to the subject list successfully.");
-        } catch (err) {
-            // Refresh the list in case the subject already exists in the database
-            // but was not present in the current frontend state.
-            try {
-                const refreshResponse = await api.get("/teacher/subjects");
-                const latestSubjects = Array.isArray(refreshResponse.data)
-                    ? refreshResponse.data
-                    : [];
-                const existingAfterRefresh = latestSubjects.find(
-                    (subject) => subject.subject_name.toLowerCase() === subjectName.toLowerCase()
-                );
-
-                if (existingAfterRefresh) {
-                    setSubjects(latestSubjects);
-                    setQuizForm((current) => ({
-                        ...current,
-                        subject: existingAfterRefresh.subject_name,
-                    }));
-                    setSubjectsError("");
-                    setNotice("This subject already exists and is now available in the suggestions.");
-                    return;
-                }
-            } catch {
-                // Keep the original API error below.
-            }
-
-            const validationMessage = err.response?.data?.errors?.subject_name?.[0];
-            setSubjectsError(
-                validationMessage ||
-                err.response?.data?.message ||
-                err.message ||
-                "Unable to add this subject. Please try again."
-            );
-        } finally {
-            setAddingSubject(false);
-        }
-    };
-
     const handleQuestionChange = (index, field, value) => {
         setQuestions((current) =>
             current.map((question, questionIndex) =>
@@ -463,66 +375,19 @@ function App() {
         const isEditing = editingQuizId !== null;
 
         try {
-            const typedSubjectName = quizForm.subject.trim();
-            if (!typedSubjectName) {
-                throw new Error("Please enter a subject name.");
-            }
-
-            let subjectName = typedSubjectName;
-            const existingSubject = subjects.find(
-                (subject) => subject.subject_name.toLowerCase() === typedSubjectName.toLowerCase()
+            const selectedSubject = subjects.find(
+                (subject) => subject.subject_name === quizForm.subject
             );
 
-            if (existingSubject) {
-                subjectName = existingSubject.subject_name;
-            } else {
-                // Save a manually typed new subject automatically before saving the quiz.
-                try {
-                    const subjectResponse = await api.post("/teacher/subjects", {
-                        subject_name: typedSubjectName,
-                    });
-                    const savedSubject = subjectResponse.data.subject;
-
-                    if (!savedSubject?.id || !savedSubject?.subject_name) {
-                        throw new Error("The server did not return the saved subject.");
-                    }
-
-                    subjectName = savedSubject.subject_name;
-                    setSubjects((current) => {
-                        const alreadyAdded = current.some(
-                            (subject) => subject.subject_name.toLowerCase() === subjectName.toLowerCase()
-                        );
-                        if (alreadyAdded) return current;
-                        return [...current, savedSubject].sort((a, b) =>
-                            a.subject_name.localeCompare(b.subject_name)
-                        );
-                    });
-                } catch (subjectError) {
-                    // Handle an already-existing subject if the frontend list was stale.
-                    if (subjectError.response?.status !== 422) {
-                        throw subjectError;
-                    }
-
-                    const refreshResponse = await api.get("/teacher/subjects");
-                    const latestSubjects = Array.isArray(refreshResponse.data)
-                        ? refreshResponse.data
-                        : [];
-                    const refreshedSubject = latestSubjects.find(
-                        (subject) => subject.subject_name.toLowerCase() === typedSubjectName.toLowerCase()
-                    );
-
-                    if (!refreshedSubject) {
-                        throw subjectError;
-                    }
-
-                    subjectName = refreshedSubject.subject_name;
-                    setSubjects(latestSubjects);
-                }
+            if (!selectedSubject) {
+                throw new Error(
+                    "Please select a subject registered by the administrator."
+                );
             }
 
             const payload = {
                 ...quizForm,
-                subject: subjectName,
+                subject: selectedSubject.subject_name,
                 // Convert the selected local time to UTC before sending it to Laravel.
                 available_at: new Date(quizForm.available_at).toISOString(),
                 grade: Number(quizForm.grade),
@@ -694,12 +559,30 @@ function App() {
             return leftDate - rightDate;
         });
 
+    const filteredMyQuizzes = quizzes.filter((quiz) => {
+        const searchTerm = quizSearch.trim().toLowerCase();
+        const searchableText = [quiz.title, quiz.subject, `grade ${quiz.grade}`]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+        const matchesSearch = !searchTerm || searchableText.includes(searchTerm);
+        const isScheduled = isFutureScheduledQuiz(quiz);
+
+        const matchesStatus =
+            quizStatusFilter === "all" ||
+            (quizStatusFilter === "scheduled" && isScheduled) ||
+            (quizStatusFilter === "available" && quiz.status === "published" && !isScheduled) ||
+            (quizStatusFilter === "draft" && quiz.status === "draft");
+
+        return matchesSearch && matchesStatus;
+    });
+
     const displayedQuizzes =
         view === "dashboard"
-            ? quizzes.slice(0, 5)
+            ? quizzes.slice(0, 3)
             : view === "scheduled"
                 ? scheduledQuizzes
-                : quizzes;
+                : filteredMyQuizzes;
 
     return (
         <div className="dashboard-layout">
@@ -829,7 +712,7 @@ function App() {
                     </div>
                 )}
 
-                {view !== "create" && view !== "preview" && (
+                {(view === "dashboard" || view === "scheduled") && (
                     <section className="stats-grid">
                         <article className="stat-card">
                             <div className="stat-icon purple">▤</div>
@@ -906,40 +789,30 @@ function App() {
 
                                 <div className="builder-field">
                                     <label htmlFor="quiz-subject">Subject *</label>
-                                    <input
+                                    <select
                                         id="quiz-subject"
                                         name="subject"
-                                        type="text"
                                         value={quizForm.subject}
                                         onChange={handleQuizFieldChange}
-                                        list="quiz-subject-suggestions"
-                                        placeholder={subjectsLoading ? "Loading saved subjects..." : "Type a subject, e.g. Mathematics"}
-                                        maxLength={100}
-                                        autoComplete="off"
                                         required
-                                    />
-                                    <datalist id="quiz-subject-suggestions">
+                                        disabled={subjectsLoading || subjects.length === 0}
+                                    >
+                                        <option value="">
+                                            {subjectsLoading
+                                                ? "Loading registered subjects..."
+                                                : subjects.length === 0
+                                                    ? "No subjects registered by Admin"
+                                                    : "Select a subject"}
+                                        </option>
                                         {subjects.map((subject) => (
-                                            <option key={subject.id} value={subject.subject_name} />
+                                            <option key={subject.id} value={subject.subject_name}>
+                                                {subject.subject_name}
+                                            </option>
                                         ))}
-                                    </datalist>
+                                    </select>
                                     <small className="subject-input-hint">
-                                        Type any subject name here. Previously saved subjects appear as suggestions, but you do not have to select one.
+                                        Only subjects registered in the Admin Dashboard are available here.
                                     </small>
-
-                                    {quizForm.subject.trim() && !subjects.some(
-                                        (subject) => subject.subject_name.toLowerCase() === quizForm.subject.trim().toLowerCase()
-                                    ) && (
-                                        <button
-                                            type="button"
-                                            className="save-subject-inline-button"
-                                            onClick={handleAddSubject}
-                                            disabled={addingSubject || subjectsLoading}
-                                        >
-                                            {addingSubject ? "Adding subject..." : "＋ Add this subject to the saved list"}
-                                        </button>
-                                    )}
-
                                     {subjectsError && (
                                         <small className="subject-field-message" role="alert">
                                             {subjectsError}
@@ -1254,11 +1127,13 @@ function App() {
                                 <p>
                                     {view === "scheduled"
                                         ? "These quizzes become available at the date and time shown below."
-                                        : "Your saved quizzes and their current status."}
+                                        : view === "dashboard"
+                                            ? "A quick look at your three most recently created quizzes."
+                                            : "Search, filter, and manage all of your quizzes."}
                                 </p>
                             </div>
 
-                            {view === "dashboard" && quizzes.length > 5 && (
+                            {view === "dashboard" && quizzes.length > 3 && (
                                 <button
                                     className="text-button"
                                     onClick={() => setView("quizzes")}
@@ -1268,17 +1143,72 @@ function App() {
                             )}
                         </div>
 
+                        {view === "quizzes" && (
+                            <div className="quiz-filters">
+                                <div className="quiz-filter-field quiz-search-field">
+                                    <label htmlFor="quiz-search">Search quizzes</label>
+                                    <input
+                                        id="quiz-search"
+                                        type="search"
+                                        value={quizSearch}
+                                        onChange={(event) => setQuizSearch(event.target.value)}
+                                        placeholder="Search by quiz title, subject, or grade..."
+                                    />
+                                </div>
+
+                                <div className="quiz-filter-field quiz-status-field">
+                                    <label htmlFor="quiz-status-filter">Filter by status</label>
+                                    <select
+                                        id="quiz-status-filter"
+                                        value={quizStatusFilter}
+                                        onChange={(event) => setQuizStatusFilter(event.target.value)}
+                                    >
+                                        <option value="all">All statuses</option>
+                                        <option value="scheduled">Scheduled</option>
+                                        <option value="available">Available</option>
+                                        <option value="draft">Draft</option>
+                                    </select>
+                                </div>
+
+                                <div className="quiz-filter-count" aria-live="polite">
+                                    {displayedQuizzes.length} {displayedQuizzes.length === 1 ? "quiz" : "quizzes"}
+                                </div>
+                            </div>
+                        )}
+
                         {dataLoading ? (
                             <div className="empty-state">Loading your quizzes...</div>
                         ) : displayedQuizzes.length === 0 ? (
                             <div className="empty-state">
-                                <div className="empty-icon">{view === "scheduled" ? "◷" : "☷"}</div>
-                                <h3>{view === "scheduled" ? "No scheduled quizzes" : "No quizzes yet"}</h3>
+                                <div className="empty-icon">
+                                    {view === "scheduled" ? "◷" : view === "quizzes" && quizzes.length > 0 ? "⌕" : "☷"}
+                                </div>
+                                <h3>
+                                    {view === "scheduled"
+                                        ? "No scheduled quizzes"
+                                        : view === "quizzes" && quizzes.length > 0
+                                            ? "No matching quizzes"
+                                            : "No quizzes yet"}
+                                </h3>
                                 <p>
                                     {view === "scheduled"
                                         ? "Quizzes with a future availability time will appear here."
-                                        : "Your created quizzes will appear here."}
+                                        : view === "quizzes" && quizzes.length > 0
+                                            ? "Try a different search term or status filter."
+                                            : "Your created quizzes will appear here."}
                                 </p>
+                                {view === "quizzes" && quizzes.length > 0 && (
+                                    <button
+                                        type="button"
+                                        className="text-button"
+                                        onClick={() => {
+                                            setQuizSearch("");
+                                            setQuizStatusFilter("all");
+                                        }}
+                                    >
+                                        Clear filters
+                                    </button>
+                                )}
                             </div>
                         ) : (
                             <div className="table-wrapper">
