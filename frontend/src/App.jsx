@@ -37,16 +37,33 @@ const toLocalDateTimeInput = (value) => {
 };
 
 // A published quiz with a future availability time is scheduled, not yet available.
+const parseAvailabilityDate = (value) => {
+    if (!value) return null;
+
+    // Laravel may return a SQL timestamp without a timezone; treat that as UTC.
+    const text = String(value).trim();
+    const normalized = text.includes("T") ? text : text.replace(" ", "T");
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+    const date = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+    return Number.isNaN(date.getTime()) ? null : date;
+};
+
 const isFutureScheduledQuiz = (quiz) => {
     if (quiz?.status !== "published" || !quiz?.available_at) return false;
 
-    // Treat a timezone-less database timestamp as UTC, matching the form serializer.
-    const value = String(quiz.available_at).trim();
-    const normalized = value.includes("T") ? value : value.replace(" ", "T");
-    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
-    const availableAt = new Date(hasTimezone ? normalized : `${normalized}Z`);
+    const availableAt = parseAvailabilityDate(quiz.available_at);
+    return Boolean(availableAt && availableAt.getTime() > Date.now());
+};
 
-    return !Number.isNaN(availableAt.getTime()) && availableAt.getTime() > Date.now();
+const formatAvailabilityDateTime = (value) => {
+    const date = parseAvailabilityDate(value);
+    if (!date) return "Not set";
+
+    return date.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+    });
 };
 
 function App() {
@@ -71,6 +88,16 @@ function App() {
     const [subjectsError, setSubjectsError] = useState("");
     const [addingSubject, setAddingSubject] = useState(false);
     const [view, setView] = useState("dashboard");
+    const [, setClockTick] = useState(0);
+
+    // Refresh time-based statuses while the teacher portal remains open.
+    useEffect(() => {
+        const timer = window.setInterval(() => {
+            setClockTick((tick) => tick + 1);
+        }, 30000);
+
+        return () => window.clearInterval(timer);
+    }, []);
 
     const [quizForm, setQuizForm] = useState(initialQuiz);
     const [questions, setQuestions] = useState([emptyQuestion()]);
@@ -659,8 +686,20 @@ function App() {
         );
     }
 
+    const scheduledQuizzes = quizzes
+        .filter(isFutureScheduledQuiz)
+        .sort((left, right) => {
+            const leftDate = parseAvailabilityDate(left.available_at)?.getTime() ?? 0;
+            const rightDate = parseAvailabilityDate(right.available_at)?.getTime() ?? 0;
+            return leftDate - rightDate;
+        });
+
     const displayedQuizzes =
-        view === "dashboard" ? quizzes.slice(0, 5) : quizzes;
+        view === "dashboard"
+            ? quizzes.slice(0, 5)
+            : view === "scheduled"
+                ? scheduledQuizzes
+                : quizzes;
 
     return (
         <div className="dashboard-layout">
@@ -692,6 +731,17 @@ function App() {
                     }}
                 >
                     <span>☷</span> My Quizzes
+                </button>
+
+                <button
+                    className={`nav-item ${view === "scheduled" ? "active" : ""}`}
+                    onClick={() => {
+                        setView("scheduled");
+                        setError("");
+                        setNotice("");
+                    }}
+                >
+                    <span>◷</span> Scheduled Quizzes
                 </button>
 
                 <button
@@ -737,18 +787,22 @@ function App() {
                                     ? (editingQuizId !== null ? "Edit Quiz" : "Create Quiz")
                                     : view === "preview"
                                         ? "Quiz Preview"
-                                        : "My Quizzes"}
+                                        : view === "scheduled"
+                                            ? "Scheduled Quizzes"
+                                            : "My Quizzes"}
                         </h1>
                         <p className="header-subtitle">
                             {view === "dashboard"
                                 ? "Here is an overview of your quiz activity."
                                 : view === "create"
                                     ? (editingQuizId !== null
-                                        ? "Update your draft quiz and its questions."
-                                        : "Build a new quiz for your students.")
+                                        ? "Update your quiz details and availability time."
+                                        : "Build a new quiz and choose when it becomes available.")
                                     : view === "preview"
                                         ? "Review the quiz details and questions before using it."
-                                        : "Manage your quizzes and publication status."}
+                                        : view === "scheduled"
+                                            ? "Manage quizzes that are waiting for their availability date and time."
+                                            : "Manage your quizzes and publication status."}
                         </p>
                     </div>
 
@@ -1191,9 +1245,17 @@ function App() {
                         <div className="content-card-header">
                             <div>
                                 <h2>
-                                    {view === "dashboard" ? "Recent quizzes" : "All quizzes"}
+                                    {view === "dashboard"
+                                        ? "Recent quizzes"
+                                        : view === "scheduled"
+                                            ? "Upcoming scheduled quizzes"
+                                            : "All quizzes"}
                                 </h2>
-                                <p>Your saved quizzes and their current status.</p>
+                                <p>
+                                    {view === "scheduled"
+                                        ? "These quizzes become available at the date and time shown below."
+                                        : "Your saved quizzes and their current status."}
+                                </p>
                             </div>
 
                             {view === "dashboard" && quizzes.length > 5 && (
@@ -1210,9 +1272,13 @@ function App() {
                             <div className="empty-state">Loading your quizzes...</div>
                         ) : displayedQuizzes.length === 0 ? (
                             <div className="empty-state">
-                                <div className="empty-icon">☷</div>
-                                <h3>No quizzes yet</h3>
-                                <p>Your created quizzes will appear here.</p>
+                                <div className="empty-icon">{view === "scheduled" ? "◷" : "☷"}</div>
+                                <h3>{view === "scheduled" ? "No scheduled quizzes" : "No quizzes yet"}</h3>
+                                <p>
+                                    {view === "scheduled"
+                                        ? "Quizzes with a future availability time will appear here."
+                                        : "Your created quizzes will appear here."}
+                                </p>
                             </div>
                         ) : (
                             <div className="table-wrapper">
@@ -1222,6 +1288,7 @@ function App() {
                                         <th>Quiz title</th>
                                         <th>Grade</th>
                                         <th>Subject</th>
+                                        {view === "scheduled" && <th>Available from</th>}
                                         <th>Questions</th>
                                         <th>Status</th>
                                         <th>Action</th>
@@ -1242,6 +1309,9 @@ function App() {
                           </span>
                                             </td>
                                             <td>{quiz.subject}</td>
+                                            {view === "scheduled" && (
+                                                <td className="scheduled-date-cell">{formatAvailabilityDateTime(quiz.available_at)}</td>
+                                            )}
                                             <td>{quiz.questions_count ?? 0}</td>
                                             <td>
                           <span

@@ -1707,3 +1707,11 @@ button {
     opacity: 0.65;
     cursor: not-allowed;
 }
+
+
+/* Scheduled quiz availability date/time column */
+.scheduled-date-cell {
+    white-space: nowrap;
+    color: #56657e;
+    font-size: 13px;
+}
