@@ -3,10 +3,14 @@
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\DB;
+
 use App\Http\Controllers\APIController;
+use App\Http\Controllers\StudentAuthController;
+use App\Http\Controllers\QuizAttemptController;
 use App\Http\Controllers\TeacherAuthController;
 use App\Http\Controllers\TeacherDashboardController;
 use App\Http\Controllers\TeacherQuizController;
+use App\Http\Controllers\TeacherResultsController;
 
 /*
 |--------------------------------------------------------------------------
@@ -14,14 +18,17 @@ use App\Http\Controllers\TeacherQuizController;
 |--------------------------------------------------------------------------
 */
 
-// Existing user API
+// Existing authenticated user API
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();
 });
 
-// Student APIs
+// Existing student APIs
 Route::get('/student_list', [APIController::class, 'student_list']);
 Route::post('/student/save', [APIController::class, 'store']);
+
+// Student Login API
+Route::post('/student/login', [StudentAuthController::class, 'login']);
 
 // Teacher Login API
 Route::post('/teacher/login', [TeacherAuthController::class, 'login']);
@@ -32,8 +39,24 @@ Route::middleware('auth:sanctum')->get(
     [TeacherDashboardController::class, 'index']
 );
 
-// Protected Teacher APIs
+// Protected APIs
 Route::middleware('auth:sanctum')->group(function () {
+
+    // ---------------- Student APIs ----------------
+
+    // Student Logout
+    Route::post(
+        '/student/logout',
+        [StudentAuthController::class, 'logout']
+    );
+
+    // Submit student quiz answers
+    Route::post(
+        '/student/quizzes/{quizId}/submit',
+        [QuizAttemptController::class, 'store']
+    );
+
+    // ---------------- Teacher APIs ----------------
 
     // Teacher Logout
     Route::post(
@@ -49,9 +72,8 @@ Route::middleware('auth:sanctum')->group(function () {
             ->get();
     });
 
-// Add a new subject from the Teacher Quiz form
+    // Add a new subject
     Route::post('/teacher/subjects', function (Request $request) {
-
         $validated = $request->validate([
             'subject_name' => 'required|string|max:255|unique:subjects,subject_name',
         ]);
@@ -87,6 +109,12 @@ Route::middleware('auth:sanctum')->group(function () {
         ], 201);
     });
 
+    // Teacher Results: view student submissions
+    Route::get(
+        '/teacher/results',
+        [TeacherResultsController::class, 'index']
+    );
+
     // List teacher's quizzes
     Route::get(
         '/teacher/quizzes',
@@ -105,19 +133,19 @@ Route::middleware('auth:sanctum')->group(function () {
         [TeacherQuizController::class, 'show']
     );
 
-    // Edit a draft quiz
+    // Edit a quiz
     Route::put(
         '/teacher/quizzes/{id}',
         [TeacherQuizController::class, 'update']
     );
 
-    // Delete a draft quiz
+    // Delete a quiz
     Route::delete(
         '/teacher/quizzes/{id}',
         [TeacherQuizController::class, 'destroy']
     );
 
-    // Publish a draft quiz
+    // Publish a quiz
     Route::post(
         '/teacher/quizzes/{id}/publish',
         [TeacherQuizController::class, 'publish']

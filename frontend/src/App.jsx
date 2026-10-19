@@ -66,6 +66,18 @@ const formatAvailabilityDateTime = (value) => {
     });
 };
 
+const formatSubmissionDateTime = (value) => {
+    if (!value) return "Not available";
+
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+
+    return date.toLocaleString(undefined, {
+        dateStyle: "medium",
+        timeStyle: "short",
+    });
+};
+
 function App() {
     const [teacher, setTeacher] = useState(() => {
         try {
@@ -83,6 +95,9 @@ function App() {
     const [error, setError] = useState("");
     const [notice, setNotice] = useState("");
     const [quizzes, setQuizzes] = useState([]);
+    const [results, setResults] = useState([]);
+    const [resultsLoading, setResultsLoading] = useState(false);
+    const [selectedResult, setSelectedResult] = useState(null);
     const [subjects, setSubjects] = useState([]);
     const [subjectsLoading, setSubjectsLoading] = useState(false);
     const [subjectsError, setSubjectsError] = useState("");
@@ -433,6 +448,27 @@ function App() {
         }
     };
 
+    const handleLoadResults = async () => {
+        setView("results");
+        setError("");
+        setNotice("");
+        setResultsLoading(true);
+        setSelectedResult(null);
+
+        try {
+            const response = await api.get("/teacher/results");
+            setResults(response.data.submissions || []);
+        } catch (err) {
+            setResults([]);
+            setError(
+                err.response?.data?.message ||
+                "Unable to load student results. Please try again."
+            );
+        } finally {
+            setResultsLoading(false);
+        }
+    };
+
     const handleLogout = async () => {
         try {
             // Revoke the current token on the Laravel backend
@@ -446,6 +482,8 @@ function App() {
 
             setTeacher(null);
             setQuizzes([]);
+            setResults([]);
+            setSelectedResult(null);
             setSubjects([]);
             setSubjectsError("");
             setSubjectsLoading(false);
@@ -628,6 +666,14 @@ function App() {
                 </button>
 
                 <button
+                    className={`nav-item ${view === "results" ? "active" : ""}`}
+                    onClick={handleLoadResults}
+                    disabled={resultsLoading}
+                >
+                    <span>▥</span> Student Results
+                </button>
+
+                <button
                     className={`nav-item ${view === "create" ? "active" : ""}`}
                     onClick={() => {
                         setQuizForm(initialQuiz());
@@ -672,7 +718,9 @@ function App() {
                                         ? "Quiz Preview"
                                         : view === "scheduled"
                                             ? "Scheduled Quizzes"
-                                            : "My Quizzes"}
+                                            : view === "results"
+                                                ? "Student Results"
+                                                : "My Quizzes"}
                         </h1>
                         <p className="header-subtitle">
                             {view === "dashboard"
@@ -685,7 +733,9 @@ function App() {
                                         ? "Review the quiz details and questions before using it."
                                         : view === "scheduled"
                                             ? "Manage quizzes that are waiting for their availability date and time."
-                                            : "Manage your quizzes and publication status."}
+                                            : view === "results"
+                                                ? "Review student submissions for quizzes you created."
+                                                : "Manage your quizzes and publication status."}
                         </p>
                     </div>
 
@@ -1113,6 +1163,144 @@ function App() {
                             </div>
                         )}
                     </section>
+                ) : view === "results" ? (
+                    <>
+                        <section className="content-card">
+                            <div className="content-card-header">
+                                <div>
+                                    <h2>Student submissions</h2>
+                                    <p>View students' submitted answers and submission times. Marks are not calculated yet.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="text-button"
+                                    onClick={handleLoadResults}
+                                    disabled={resultsLoading}
+                                >
+                                    {resultsLoading ? "Refreshing..." : "Refresh results"}
+                                </button>
+                            </div>
+
+                            {resultsLoading ? (
+                                <div className="empty-state">Loading student results...</div>
+                            ) : results.length === 0 ? (
+                                <div className="empty-state">
+                                    <div className="empty-icon">▥</div>
+                                    <h3>No student submissions yet</h3>
+                                    <p>When students submit quizzes, their submissions will appear here.</p>
+                                </div>
+                            ) : (
+                                <div className="table-wrapper">
+                                    <table className="quiz-table">
+                                        <thead>
+                                        <tr>
+                                            <th>Student</th>
+                                            <th>Quiz</th>
+                                            <th>Grade</th>
+                                            <th>Subject</th>
+                                            <th>Submitted at</th>
+                                            <th>Answers</th>
+                                            <th>Action</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody>
+                                        {results.map((attempt) => {
+                                            const answerCount = Object.keys(attempt.answers || {}).length;
+
+                                            return (
+                                                <tr key={attempt.id}>
+                                                    <td>
+                                                        <strong>{attempt.student?.name || `Student #${attempt.student_id}`}</strong>
+                                                        <span className="table-subtitle">
+                                                                {attempt.student?.email || attempt.student?.reg_no || "Student account"}
+                                                            </span>
+                                                    </td>
+                                                    <td>
+                                                        <strong>{attempt.quiz?.title || `Quiz #${attempt.quiz_id}`}</strong>
+                                                        <span className="table-subtitle">
+                                                                Submitted #{attempt.id}
+                                                            </span>
+                                                    </td>
+                                                    <td>
+                                                            <span className="grade-pill">
+                                                                {attempt.quiz?.grade ? `Grade ${attempt.quiz.grade}` : "—"}
+                                                            </span>
+                                                    </td>
+                                                    <td>{attempt.quiz?.subject || "—"}</td>
+                                                    <td className="scheduled-date-cell">
+                                                        {formatSubmissionDateTime(attempt.submitted_at)}
+                                                    </td>
+                                                    <td>{answerCount}</td>
+                                                    <td>
+                                                        <button
+                                                            type="button"
+                                                            className="publish-button preview-button"
+                                                            onClick={() => setSelectedResult(attempt)}
+                                                        >
+                                                            View answers
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            )}
+                        </section>
+
+                        {selectedResult && (
+                            <section className="content-card quiz-preview-card">
+                                <div className="content-card-header">
+                                    <div>
+                                        <h2>{selectedResult.quiz?.title || "Submitted answers"}</h2>
+                                        <p>
+                                            {selectedResult.student?.name || `Student #${selectedResult.student_id}`} · Submitted {formatSubmissionDateTime(selectedResult.submitted_at)}
+                                        </p>
+                                    </div>
+                                    <button
+                                        type="button"
+                                        className="text-button"
+                                        onClick={() => setSelectedResult(null)}
+                                    >
+                                        Close details
+                                    </button>
+                                </div>
+
+                                {selectedResult.quiz?.questions?.length ? (
+                                    <div className="preview-question-list">
+                                        {selectedResult.quiz.questions.map((question, index) => {
+                                            const selectedOption = String(
+                                                selectedResult.answers?.[String(question.id)] || ""
+                                            ).toUpperCase();
+                                            const optionText = selectedOption
+                                                ? question[`option_${selectedOption.toLowerCase()}`]
+                                                : "";
+
+                                            return (
+                                                <article className="preview-question" key={question.id || index}>
+                                                    <div className="preview-question-title">
+                                                        <strong>Question {index + 1}</strong>
+                                                        <span>Student response</span>
+                                                    </div>
+                                                    <p>{question.question_text}</p>
+                                                    <div className="preview-option">
+                                                        <span>{selectedOption || "—"}</span>
+                                                        <p>{optionText || (selectedOption ? "Selected option details unavailable" : "No answer recorded")}</p>
+                                                    </div>
+                                                </article>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <div className="empty-state">
+                                        <h3>Question details unavailable</h3>
+                                        <p>The submitted answer data is saved, but question details could not be loaded.</p>
+                                    </div>
+                                )}
+                            </section>
+                        )}
+                    </>
                 ) : (
                     <section className="content-card">
                         <div className="content-card-header">
@@ -1317,5 +1505,3 @@ function App() {
 }
 
 export default App;
-
-
