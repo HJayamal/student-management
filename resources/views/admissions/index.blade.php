@@ -142,7 +142,7 @@
 
         .admission-table {
             width: 100%;
-            min-width: 780px;
+            min-width: 1040px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -427,18 +427,77 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">
-                                    Course
+                                <label for="course_id" class="form-label">
+                                    Course <span class="text-danger">*</span>
                                 </label>
 
-                                <input
-                                    type="text"
-                                    name="course"
-                                    class="form-control"
-                                    value="{{ old('course') }}"
-                                    placeholder="Example: Software Engineering"
+                                <select
+                                    id="course_id"
+                                    name="course_id"
+                                    class="form-select"
                                     required
                                 >
+                                    <option value="">Select a course</option>
+
+                                    @foreach($courses as $course)
+                                        <option
+                                            value="{{ $course->id }}"
+                                            @selected((string) old('course_id') === (string) $course->id)
+                                        >
+                                            {{ $course->course_name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="degree_id" class="form-label">
+                                    Degree <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    id="degree_id"
+                                    name="degree_id"
+                                    class="form-select"
+                                    required
+                                >
+                                    <option value="">Select a degree</option>
+
+                                    @foreach($degrees as $degree)
+                                        <option
+                                            value="{{ $degree->id }}"
+                                            data-course-id="{{ $degree->course_id }}"
+                                            @selected((string) old('degree_id') === (string) $degree->id)
+                                        >
+                                            {{ $degree->degree_name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="batch_id" class="form-label">
+                                    Batch <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    id="batch_id"
+                                    name="batch_id"
+                                    class="form-select"
+                                    required
+                                >
+                                    <option value="">Select a batch</option>
+
+                                    @foreach($batches as $batch)
+                                        <option
+                                            value="{{ $batch->id }}"
+                                            data-degree-id="{{ $batch->degree_id }}"
+                                            @selected((string) old('batch_id') === (string) $batch->id)
+                                        >
+                                            {{ $batch->batch_name }}
+                                        </option>
+                                    @endforeach
+                                </select>
                             </div>
 
                             <div class="mb-3">
@@ -542,6 +601,8 @@
                                     <th>Admission No</th>
                                     <th>Reg No</th>
                                     <th>Course</th>
+                                    <th>Degree</th>
+                                    <th>Batch</th>
                                     <th>Date</th>
                                     <th>Status</th>
                                     <th class="action-column">Action</th>
@@ -562,12 +623,20 @@
 
                                         <td>
                                             <span class="reg-badge">
-                                                {{ $admission->student_reg_no }}
+                                                {{ $admission->reg_no }}
                                             </span>
                                         </td>
 
                                         <td>
                                             {{ $admission->course }}
+                                        </td>
+
+                                        <td>
+                                            {{ $admission->degree ?: '—' }}
+                                        </td>
+
+                                        <td>
+                                            {{ $admission->batch ?: '—' }}
                                         </td>
 
                                         <td>
@@ -626,7 +695,7 @@
 
                                     <tr>
                                         <td
-                                            colspan="6"
+                                            colspan="8"
                                             class="text-center empty-state">
 
                                             <i class="bi bi-clipboard2-x d-block"></i>
@@ -659,5 +728,99 @@
         </div>
 
     </div>
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const courseSelect = document.getElementById('course_id');
+            const degreeSelect = document.getElementById('degree_id');
+            const batchSelect = document.getElementById('batch_id');
+
+            if (!courseSelect || !degreeSelect || !batchSelect) return;
+
+            // Keep a copy of all database options so filtering never destroys them.
+            const allDegreeOptions = Array.from(degreeSelect.options)
+                .filter(option => option.value !== '')
+                .map(option => option.cloneNode(true));
+
+            const allBatchOptions = Array.from(batchSelect.options)
+                .filter(option => option.value !== '')
+                .map(option => option.cloneNode(true));
+
+            const originalDegree = degreeSelect.value;
+            const originalBatch = batchSelect.value;
+
+            function setPlaceholder(select, text, detail = '') {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = text;
+                if (detail) option.dataset.detail = detail;
+                select.appendChild(option);
+            }
+
+            function renderDegrees(preserveSelection = false) {
+                const courseId = courseSelect.value;
+                const previous = preserveSelection ? (originalDegree || degreeSelect.value) : '';
+                const matching = courseId
+                    ? allDegreeOptions.filter(option => String(option.dataset.courseId) === String(courseId))
+                    : allDegreeOptions;
+
+                degreeSelect.innerHTML = '';
+                setPlaceholder(
+                    degreeSelect,
+                    courseId
+                        ? (matching.length ? 'Select a degree' : 'No degrees linked to this course')
+                        : 'Select a course first'
+                );
+
+                // Fallback keeps choices visible if course relationships are incomplete.
+                const optionsToShow = matching.length ? matching : allDegreeOptions;
+                optionsToShow.forEach(option => degreeSelect.appendChild(option.cloneNode(true)));
+                degreeSelect.disabled = false;
+
+                if (previous && optionsToShow.some(option => String(option.value) === String(previous))) {
+                    degreeSelect.value = previous;
+                }
+
+                renderBatches(preserveSelection);
+            }
+
+            function renderBatches(preserveSelection = false) {
+                const degreeId = degreeSelect.value;
+                const previous = preserveSelection ? (originalBatch || batchSelect.value) : '';
+                const matching = degreeId
+                    ? allBatchOptions.filter(option => String(option.dataset.degreeId) === String(degreeId))
+                    : allBatchOptions;
+
+                batchSelect.innerHTML = '';
+                setPlaceholder(
+                    batchSelect,
+                    degreeId
+                        ? (matching.length ? 'Select a batch' : 'No batches linked to this degree')
+                        : 'Select a degree first'
+                );
+
+                // Fallback keeps the dropdown usable; server-side validation blocks invalid pairings.
+                const optionsToShow = matching.length ? matching : allBatchOptions;
+                optionsToShow.forEach(option => batchSelect.appendChild(option.cloneNode(true)));
+                batchSelect.disabled = false;
+
+                if (previous && optionsToShow.some(option => String(option.value) === String(previous))) {
+                    batchSelect.value = previous;
+                }
+            }
+
+            courseSelect.addEventListener('change', function () {
+                renderDegrees(false);
+            });
+
+            degreeSelect.addEventListener('change', function () {
+                renderBatches(false);
+            });
+
+            // On first load, filter according to existing selections if any.
+            renderDegrees(true);
+        });
+    </script>
 
 @endsection

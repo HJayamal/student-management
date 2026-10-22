@@ -18,6 +18,9 @@ class TeacherQuizController extends Controller
                 'id',
                 'title',
                 'grade',
+                'course',
+                'degree',
+                'batch',
                 'subject',
                 'description',
                 'duration_minutes',
@@ -40,7 +43,13 @@ class TeacherQuizController extends Controller
     {
         $validated = $request->validate([
             'title' => 'required|string|max:255',
+
+            // Temporary legacy field; remove after the database migration.
             'grade' => 'required|integer|min:1|max:13',
+
+            'course' => 'required|string|max:255',
+            'degree' => 'required|string|max:255',
+            'batch' => 'required|string|max:50',
             'subject' => 'required|string|max:100',
             'description' => 'nullable|string',
             'duration_minutes' => 'required|integer|min:1|max:300',
@@ -65,6 +74,9 @@ class TeacherQuizController extends Controller
                 'teacher_id' => $request->user()->id,
                 'title' => $validated['title'],
                 'grade' => $validated['grade'],
+                'course' => $validated['course'],
+                'degree' => $validated['degree'],
+                'batch' => $validated['batch'],
                 'subject' => $validated['subject'],
                 'description' => $validated['description'] ?? null,
                 'duration_minutes' => $validated['duration_minutes'],
@@ -94,7 +106,9 @@ class TeacherQuizController extends Controller
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
-                'grade' => $quiz->grade,
+                'course' => $quiz->course,
+                'degree' => $quiz->degree,
+                'batch' => $quiz->batch,
                 'subject' => $quiz->subject,
                 'duration_minutes' => $quiz->duration_minutes,
                 'available_at' => $quiz->available_at,
@@ -135,7 +149,13 @@ class TeacherQuizController extends Controller
 
         $validated = $request->validate([
             'title' => 'required|string|max:255',
+
+            // Temporary legacy field; remove after the database migration.
             'grade' => 'required|integer|min:1|max:13',
+
+            'course' => 'required|string|max:255',
+            'degree' => 'required|string|max:255',
+            'batch' => 'required|string|max:50',
             'subject' => 'required|string|max:100',
             'description' => 'nullable|string',
             'duration_minutes' => 'required|integer|min:1|max:300',
@@ -159,6 +179,9 @@ class TeacherQuizController extends Controller
             $quiz->update([
                 'title' => $validated['title'],
                 'grade' => $validated['grade'],
+                'course' => $validated['course'],
+                'degree' => $validated['degree'],
+                'batch' => $validated['batch'],
                 'subject' => $validated['subject'],
                 'description' => $validated['description'] ?? null,
                 'duration_minutes' => $validated['duration_minutes'],
@@ -182,7 +205,7 @@ class TeacherQuizController extends Controller
         });
 
         return response()->json([
-            'message' => 'Quiz updated successfully.',
+            'message' => 'Quiz schedule updated successfully.',
         ]);
     }
 
@@ -234,7 +257,9 @@ class TeacherQuizController extends Controller
             'quiz' => [
                 'id' => $quiz->id,
                 'title' => $quiz->title,
-                'grade' => $quiz->grade,
+                'course' => $quiz->course,
+                'degree' => $quiz->degree,
+                'batch' => $quiz->batch,
                 'subject' => $quiz->subject,
                 'available_at' => $quiz->available_at,
                 'status' => $quiz->status,

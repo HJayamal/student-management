@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\DB;
 
 use App\Http\Controllers\APIController;
 use App\Http\Controllers\StudentAuthController;
+use App\Http\Controllers\StudentDashboardController;
 use App\Http\Controllers\QuizAttemptController;
 use App\Http\Controllers\TeacherAuthController;
 use App\Http\Controllers\TeacherDashboardController;
@@ -27,13 +28,13 @@ Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
 Route::get('/student_list', [APIController::class, 'student_list']);
 Route::post('/student/save', [APIController::class, 'store']);
 
-// Student Login API
+// Student Login
 Route::post('/student/login', [StudentAuthController::class, 'login']);
 
-// Teacher Login API
+// Teacher Login
 Route::post('/teacher/login', [TeacherAuthController::class, 'login']);
 
-// Protected Teacher Dashboard API
+// Protected Teacher Dashboard
 Route::middleware('auth:sanctum')->get(
     '/teacher/dashboard',
     [TeacherDashboardController::class, 'index']
@@ -44,13 +45,16 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ---------------- Student APIs ----------------
 
-    // Student Logout
+    Route::get(
+        '/student/dashboard',
+        [StudentDashboardController::class, 'index']
+    );
+
     Route::post(
         '/student/logout',
         [StudentAuthController::class, 'logout']
     );
 
-    // Submit student quiz answers
     Route::post(
         '/student/quizzes/{quizId}/submit',
         [QuizAttemptController::class, 'store']
@@ -58,17 +62,37 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // ---------------- Teacher APIs ----------------
 
-    // Teacher Logout
     Route::post(
         '/teacher/logout',
         [TeacherAuthController::class, 'logout']
     );
 
-    // Get existing subjects
+    // Get subjects with Course and Degree information
     Route::get('/teacher/subjects', function () {
         return DB::table('subjects')
-            ->select('id', 'subject_name')
-            ->orderBy('subject_name')
+            ->leftJoin(
+                'degrees',
+                'subjects.degree_id',
+                '=',
+                'degrees.id'
+            )
+            ->leftJoin(
+                'courses',
+                'degrees.course_id',
+                '=',
+                'courses.id'
+            )
+            ->select(
+                'subjects.id',
+                'subjects.subject_name',
+                'subjects.degree_id',
+                'degrees.degree_name',
+                'degrees.course_id',
+                DB::raw(
+                    'COALESCE(courses.course_name, subjects.course_name) AS course_name'
+                )
+            )
+            ->orderBy('subjects.subject_name')
             ->get();
     });
 
@@ -91,6 +115,7 @@ Route::middleware('auth:sanctum')->group(function () {
         $id = DB::table('subjects')->insertGetId([
             'subject_code' => $subjectCode,
             'course_name' => null,
+            'degree_id' => null,
             'subject_name' => $validated['subject_name'],
             'teacher' => $request->user()->name,
             'description' => null,
@@ -99,7 +124,7 @@ Route::middleware('auth:sanctum')->group(function () {
         ]);
 
         $subject = DB::table('subjects')
-            ->select('id', 'subject_name')
+            ->select('id', 'subject_name', 'degree_id', 'course_name')
             ->where('id', $id)
             ->first();
 
@@ -109,7 +134,41 @@ Route::middleware('auth:sanctum')->group(function () {
         ], 201);
     });
 
-    // Teacher Results: view student submissions
+    // Get Course + Degree + Batch combinations from Academic Setup
+    Route::get('/teacher/academic-options', function () {
+        $academicOptions = DB::table('courses')
+            ->join(
+                'degrees',
+                'degrees.course_id',
+                '=',
+                'courses.id'
+            )
+            ->join(
+                'batches',
+                'batches.degree_id',
+                '=',
+                'degrees.id'
+            )
+            ->select(
+                'courses.id as course_id',
+                'courses.course_name as course',
+                'degrees.id as degree_id',
+                'degrees.degree_name as degree',
+                'batches.id as batch_id',
+                'batches.batch_name as batch'
+            )
+            ->distinct()
+            ->orderBy('courses.course_name')
+            ->orderBy('degrees.degree_name')
+            ->orderBy('batches.batch_name')
+            ->get();
+
+        return response()->json([
+            'academic_options' => $academicOptions,
+        ]);
+    });
+
+    // Teacher Results
     Route::get(
         '/teacher/results',
         [TeacherResultsController::class, 'index']
@@ -127,7 +186,7 @@ Route::middleware('auth:sanctum')->group(function () {
         [TeacherQuizController::class, 'store']
     );
 
-    // Preview one quiz with questions
+    // Preview a quiz
     Route::get(
         '/teacher/quizzes/{id}',
         [TeacherQuizController::class, 'show']

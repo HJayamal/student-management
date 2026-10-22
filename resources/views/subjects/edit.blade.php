@@ -46,7 +46,8 @@
             margin-bottom: 8px;
         }
 
-        .subject-edit-page .form-control {
+        .subject-edit-page .form-control,
+        .subject-edit-page .form-select {
             min-height: 44px;
             border: 1px solid #dbe3ef;
             border-radius: 10px;
@@ -55,14 +56,27 @@
             box-shadow: none;
         }
 
-        .subject-edit-page .form-control:focus {
+        .subject-edit-page .form-control:focus,
+        .subject-edit-page .form-select:focus {
             border-color: #6366f1;
             box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+        }
+
+        .subject-edit-page .form-control[readonly] {
+            background: #f8fafc;
+            color: #475569;
         }
 
         .subject-edit-page textarea.form-control {
             min-height: 100px;
             resize: vertical;
+        }
+
+        .field-hint {
+            display: block;
+            margin-top: 6px;
+            color: #64748b;
+            font-size: 12px;
         }
 
         .edit-actions {
@@ -112,44 +126,32 @@
         }
 
         @media (max-width: 576px) {
-            .edit-body {
-                padding: 18px;
-            }
-
-            .edit-header {
-                padding: 15px 18px;
-            }
+            .edit-body { padding: 18px; }
+            .edit-header { padding: 15px 18px; }
         }
     </style>
 
     <div class="subject-edit-page">
-
         <div class="row justify-content-center">
-
             <div class="col-lg-7 col-md-9">
-
                 <div class="edit-card">
-
                     <div class="edit-header">
                         <h3>
                             <i class="bi bi-pencil-square me-2"></i>
                             Update Subject
                         </h3>
-
-                        <small>
-                            Edit subject information
-                        </small>
+                        <small>Edit subject information and academic assignment</small>
                     </div>
 
                     <div class="edit-body">
+                        @php
+                            $selectedDegree = $degrees->firstWhere('id', old('degree_id', $subject->degree_id));
+                        @endphp
 
-                        @if($errors->any())
-                            <div class="alert alert-danger mb-4">
-                                <div class="fw-semibold mb-1">
-                                    Please fix the following:
-                                </div>
-
-                                @foreach($errors->all() as $error)
+                        @if ($errors->any())
+                            <div class="alert alert-danger mb-4" role="alert">
+                                <div class="fw-semibold mb-1">Please fix the following:</div>
+                                @foreach ($errors->all() as $error)
                                     <div>
                                         <i class="bi bi-exclamation-circle me-1"></i>
                                         {{ $error }}
@@ -158,81 +160,83 @@
                             </div>
                         @endif
 
-                        <form
-                            action="{{ route('subjects.update', $subject) }}"
-                            method="POST">
-
+                        <form action="{{ route('subjects.update', $subject) }}" method="POST">
                             @csrf
                             @method('PUT')
 
-                            <!-- Subject Code -->
                             <div class="mb-3">
-                                <label class="form-label">
-                                    Subject Code
-                                </label>
-
+                                <label for="subject_code" class="form-label">Subject Code *</label>
                                 <input
                                     type="text"
+                                    id="subject_code"
                                     name="subject_code"
                                     value="{{ old('subject_code', $subject->subject_code) }}"
                                     class="form-control"
+                                    maxlength="255"
                                     required
                                 >
                             </div>
 
-                            <!-- Course Name -->
                             <div class="mb-3">
-                                <label class="form-label">
-                                    Course Name
-                                </label>
+                                <label for="degree_id" class="form-label">Degree *</label>
+                                <select id="degree_id" name="degree_id" class="form-select" required>
+                                    <option value="">Select a degree</option>
+                                    @foreach ($degrees as $degree)
+                                        <option
+                                            value="{{ $degree->id }}"
+                                            data-course-name="{{ $degree->course?->course_name ?? '' }}"
+                                            @selected((string) old('degree_id', $subject->degree_id) === (string) $degree->id)
+                                        >
+                                            {{ $degree->degree_name }} — {{ $degree->course?->course_name ?? 'No course' }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                                <small class="field-hint">Choose the degree this subject belongs to.</small>
+                            </div>
 
+                            <div class="mb-3">
+                                <label for="course_name_display" class="form-label">Course Name</label>
                                 <input
                                     type="text"
-                                    name="course_name"
-                                    value="{{ old('course_name', $subject->course_name) }}"
+                                    id="course_name_display"
                                     class="form-control"
-                                    placeholder="BSc Software Engineering"
-                                    required
+                                    value="{{ $selectedDegree?->course?->course_name ?? $subject->course_name }}"
+                                    placeholder="Course is filled from the selected degree"
+                                    readonly
                                 >
+                                <small class="field-hint">Automatically taken from the selected degree.</small>
                             </div>
 
-                            <!-- Subject Name -->
                             <div class="mb-3">
-                                <label class="form-label">
-                                    Subject Name
-                                </label>
-
+                                <label for="subject_name" class="form-label">Subject Name *</label>
                                 <input
                                     type="text"
+                                    id="subject_name"
                                     name="subject_name"
                                     value="{{ old('subject_name', $subject->subject_name) }}"
                                     class="form-control"
+                                    maxlength="255"
                                     required
                                 >
                             </div>
 
-                            <!-- Teacher -->
                             <div class="mb-3">
-                                <label class="form-label">
-                                    Teacher
-                                </label>
-
+                                <label for="teacher" class="form-label">Teacher *</label>
                                 <input
                                     type="text"
+                                    id="teacher"
                                     name="teacher"
                                     value="{{ old('teacher', $subject->teacher) }}"
                                     class="form-control"
+                                    maxlength="255"
                                     required
                                 >
                             </div>
 
-                            <!-- Description -->
                             <div class="mb-4">
-                                <label class="form-label">
-                                    Description
-                                </label>
-
+                                <label for="description" class="form-label">Description</label>
                                 <textarea
+                                    id="description"
                                     name="description"
                                     class="form-control"
                                     rows="4"
@@ -240,37 +244,35 @@
                             </div>
 
                             <div class="edit-actions">
-
-                                <button
-                                    type="submit"
-                                    class="update-subject-btn">
-
+                                <button type="submit" class="update-subject-btn">
                                     <i class="bi bi-check-circle me-1"></i>
                                     Update Subject
-
                                 </button>
-
-                                <a
-                                    href="{{ route('subjects.index') }}"
-                                    class="back-btn">
-
+                                <a href="{{ route('subjects.index') }}" class="back-btn">
                                     <i class="bi bi-arrow-left me-1"></i>
                                     Back
-
                                 </a>
-
                             </div>
-
                         </form>
-
                     </div>
-
                 </div>
-
             </div>
-
         </div>
-
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const degreeSelect = document.getElementById('degree_id');
+            const courseDisplay = document.getElementById('course_name_display');
+
+            function updateCourseDisplay() {
+                const selectedOption = degreeSelect.options[degreeSelect.selectedIndex];
+                courseDisplay.value = selectedOption?.dataset.courseName || '';
+            }
+
+            degreeSelect.addEventListener('change', updateCourseDisplay);
+            updateCourseDisplay();
+        });
+    </script>
 
 @endsection

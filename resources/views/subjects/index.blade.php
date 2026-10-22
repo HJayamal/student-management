@@ -72,7 +72,8 @@
             margin-bottom: 8px;
         }
 
-        .subject-page .form-control {
+        .subject-page .form-control,
+        .subject-page .form-select {
             background: #ffffff !important;
             color: #1e293b !important;
             border: 1px solid #dbe3ef !important;
@@ -83,7 +84,8 @@
             transition: all 0.2s ease;
         }
 
-        .subject-page .form-control:focus {
+        .subject-page .form-control:focus,
+        .subject-page .form-select:focus {
             background: #ffffff !important;
             color: #1e293b !important;
             border-color: #6366f1 !important;
@@ -152,7 +154,7 @@
 
         .subject-table {
             width: 100%;
-            min-width: 860px;
+            min-width: 1000px;
             margin-bottom: 0 !important;
             background: #ffffff !important;
         }
@@ -206,6 +208,17 @@
             font-size: 12px;
             font-weight: 700;
             white-space: nowrap;
+        }
+
+        .degree-badge {
+            display: inline-flex;
+            align-items: center;
+            background: #f3e8ff;
+            color: #7e22ce !important;
+            padding: 6px 10px;
+            border-radius: 999px;
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .subject-name {
@@ -422,17 +435,52 @@
                             </div>
 
                             <div class="mb-3">
-                                <label class="form-label">
+                                <label for="degree_id" class="form-label">
+                                    Degree <span class="text-danger">*</span>
+                                </label>
+
+                                <select
+                                    id="degree_id"
+                                    name="degree_id"
+                                    class="form-select"
+                                    required
+                                >
+                                    <option value="">Select a degree</option>
+
+                                    @foreach($degrees as $degree)
+                                        <option
+                                            value="{{ $degree->id }}"
+                                            data-course-name="{{ $degree->course?->course_name ?? '' }}"
+                                            @selected(old('degree_id') == $degree->id)
+                                        >
+                                            {{ $degree->degree_name }} — {{ $degree->course?->course_name ?? 'No course' }}
+                                        </option>
+                                    @endforeach
+                                </select>
+
+                                @if($degrees->isEmpty())
+                                    <small class="text-danger d-block mt-2">
+                                        Register a Course and Degree before adding a subject.
+                                    </small>
+                                @else
+                                    <small class="text-muted d-block mt-2">
+                                        Select the degree this subject belongs to.
+                                    </small>
+                                @endif
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="course_name" class="form-label">
                                     Course Name
                                 </label>
 
                                 <input
                                     type="text"
-                                    name="course_name"
+                                    id="course_name"
                                     class="form-control"
-                                    placeholder="BSc Software Engineering"
                                     value="{{ old('course_name') }}"
-                                    required
+                                    placeholder="Automatically filled from the selected degree"
+                                    readonly
                                 >
                             </div>
 
@@ -530,6 +578,7 @@
                                 <tr>
                                     <th>Code</th>
                                     <th>Course</th>
+                                    <th>Degree</th>
                                     <th>Subject</th>
                                     <th>Teacher</th>
                                     <th>Description</th>
@@ -553,7 +602,14 @@
                                         <td>
                                             <span class="course-badge">
                                                 <i class="bi bi-mortarboard-fill me-1"></i>
-                                                {{ $subject->course_name ?: 'No course' }}
+                                                {{ $subject->course_name ?: ($subject->degree?->course?->course_name ?? 'No course') }}
+                                            </span>
+                                        </td>
+
+                                        <td>
+                                            <span class="degree-badge">
+                                                <i class="bi bi-award-fill me-1"></i>
+                                                {{ $subject->degree?->degree_name ?: 'Not assigned' }}
                                             </span>
                                         </td>
 
@@ -614,7 +670,7 @@
                                     <tr>
 
                                         <td
-                                            colspan="6"
+                                            colspan="7"
                                             class="text-center empty-state">
 
                                             <i class="bi bi-journal-x d-block mb-2"></i>
@@ -648,5 +704,26 @@
         </div>
 
     </div>
+
+
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const degreeSelect = document.getElementById('degree_id');
+            const courseDisplay = document.getElementById('course_name');
+
+            if (!degreeSelect || !courseDisplay) return;
+
+            function updateCourseName() {
+                const selectedOption = degreeSelect.options[degreeSelect.selectedIndex];
+                courseDisplay.value = selectedOption
+                    ? (selectedOption.dataset.courseName || '')
+                    : '';
+            }
+
+            degreeSelect.addEventListener('change', updateCourseName);
+            updateCourseName();
+        });
+    </script>
 
 @endsection

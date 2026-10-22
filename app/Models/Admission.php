@@ -13,6 +13,8 @@ class Admission extends Model
         'admission_no',
         'reg_no',
         'course',
+        'degree',
+        'batch',
         'admission_date',
         'status',
     ];

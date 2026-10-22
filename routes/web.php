@@ -9,6 +9,9 @@ use App\Http\Controllers\ExamController;
 use App\Http\Controllers\LoginController;
 use App\Http\Controllers\ExportController;
 use App\Http\Controllers\ImportController;
+use App\Http\Controllers\CourseController;
+use App\Http\Controllers\DegreeController;
+use App\Http\Controllers\BatchController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/login', [LoginController::class, 'login'])
@@ -28,6 +31,7 @@ Route::view('/contact', 'contact')
 
 Route::middleware('student.auth')->group(function () {
 
+    // Admin Dashboard
     Route::get('/', [AdminController::class, 'dashboard'])
         ->name('home');
 
@@ -41,25 +45,48 @@ Route::middleware('student.auth')->group(function () {
     Route::resource('students', StudentController::class)
         ->except(['show']);
 
-    Route::get('/students/export-pdf', [ExportController::class, 'studentsPdf'])
-        ->name('students.export-pdf');
+    Route::get(
+        '/students/export-pdf',
+        [ExportController::class, 'studentsPdf']
+    )->name('students.export-pdf');
 
-    Route::post('/students/import', [ImportController::class, 'students'])
-        ->name('students.import');
+    Route::post(
+        '/students/import',
+        [ImportController::class, 'students']
+    )->name('students.import');
 
-    Route::get('/student-image-list', [StudentController::class, 'imageList'])
-        ->name('students.image-list');
+    Route::get(
+        '/student-image-list',
+        [StudentController::class, 'imageList']
+    )->name('students.image-list');
 
-    // Admin-only Teacher Management routes
+    // Admin-only routes
     Route::middleware('admin.auth')->group(function () {
 
-        Route::get('/teachers/export-pdf', [ExportController::class, 'teachersPdf'])
-            ->name('teachers.export-pdf');
+        // Teacher Management
+        Route::get(
+            '/teachers/export-pdf',
+            [ExportController::class, 'teachersPdf']
+        )->name('teachers.export-pdf');
 
-        Route::post('/teachers/import', [ImportController::class, 'teachers'])
-            ->name('teachers.import');
+        Route::post(
+            '/teachers/import',
+            [ImportController::class, 'teachers']
+        )->name('teachers.import');
 
         Route::resource('teachers', TeacherController::class)
+            ->except(['show']);
+
+        // Academic Setup - Course Management
+        Route::resource('courses', CourseController::class)
+            ->except(['show']);
+
+        // Academic Setup - Degree Management
+        Route::resource('degrees', DegreeController::class)
+            ->except(['show']);
+
+        // Academic Setup - Batch Management
+        Route::resource('batches', BatchController::class)
             ->except(['show']);
     });
 

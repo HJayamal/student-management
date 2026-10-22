@@ -16,11 +16,15 @@ class Quiz extends Model
         'title',
         'grade',
         'subject',
+        'course',
+        'degree',
+        'batch',
         'description',
         'duration_minutes',
         'available_at',
         'status',
         'published_at',
+
 
     ];
 

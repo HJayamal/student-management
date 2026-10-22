@@ -14,7 +14,9 @@ const emptyQuestion = () => ({
 
 const initialQuiz = () => ({
     title: "",
-    grade: "6",
+    course: "",
+    degree: "",
+    batch: "",
     subject: "",
     description: "",
     duration_minutes: 15,
@@ -101,6 +103,9 @@ function App() {
     const [subjects, setSubjects] = useState([]);
     const [subjectsLoading, setSubjectsLoading] = useState(false);
     const [subjectsError, setSubjectsError] = useState("");
+    const [academicOptions, setAcademicOptions] = useState([]);
+    const [academicOptionsLoading, setAcademicOptionsLoading] = useState(false);
+    const [academicOptionsError, setAcademicOptionsError] = useState("");
     const [view, setView] = useState("dashboard");
     const [quizSearch, setQuizSearch] = useState("");
     const [quizStatusFilter, setQuizStatusFilter] = useState("all");
@@ -183,8 +188,36 @@ function App() {
             }
         }
 
+        async function loadAcademicOptions() {
+            setAcademicOptionsLoading(true);
+            setAcademicOptionsError("");
+
+            try {
+                const response = await api.get("/teacher/academic-options");
+
+                if (cancelled) return;
+
+                setAcademicOptions(
+                    Array.isArray(response.data?.academic_options)
+                        ? response.data.academic_options
+                        : []
+                );
+            } catch (err) {
+                if (cancelled) return;
+
+                setAcademicOptions([]);
+                setAcademicOptionsError(
+                    err.response?.data?.message ||
+                    "Unable to load Course, Degree and Batch options."
+                );
+            } finally {
+                if (!cancelled) setAcademicOptionsLoading(false);
+            }
+        }
+
         loadDashboard();
         loadSubjects();
+        loadAcademicOptions();
 
         return () => {
             cancelled = true;
@@ -226,7 +259,7 @@ function App() {
 
         if (
             !window.confirm(
-                `Publish "${quiz.title}" for Grade ${quiz.grade}?`
+                `Publish "${quiz.title}" for ${quiz.course || "the selected course"} · ${quiz.degree || "degree"} · Batch ${quiz.batch || "batch"}?`
             )
         ) {
             return;
@@ -291,11 +324,13 @@ function App() {
             const data = response.data.quiz;
 
             setQuizForm({
-                title: data.title,
-                grade: String(data.grade),
-                subject: data.subject,
+                title: data.title || "",
+                course: data.course || "",
+                degree: data.degree || "",
+                batch: data.batch || "",
+                subject: data.subject || "",
                 description: data.description || "",
-                duration_minutes: String(data.duration_minutes),
+                duration_minutes: String(data.duration_minutes ?? 15),
                 available_at: toLocalDateTimeInput(data.available_at),
             });
 
@@ -351,13 +386,26 @@ function App() {
     const handleQuizFieldChange = (event) => {
         const { name, value } = event.target;
 
-        setQuizForm((current) => ({
-            ...current,
-            [name]: value,
-        }));
+        setQuizForm((current) => {
+            const next = { ...current, [name]: value };
 
-        if (name === "subject") {
-            setSubjectsError("");
+            // Keep academic selections linked to a valid academic combination.
+            // A course or degree change also clears the selected subject.
+            if (name === "course") {
+                next.degree = "";
+                next.batch = "";
+                next.subject = "";
+            } else if (name === "degree") {
+                next.batch = "";
+                next.subject = "";
+            }
+
+            return next;
+        });
+
+        if (name === "subject") setSubjectsError("");
+        if (["course", "degree", "batch"].includes(name)) {
+            setAcademicOptionsError("");
         }
     };
 
@@ -391,21 +439,46 @@ function App() {
 
         try {
             const selectedSubject = subjects.find(
-                (subject) => subject.subject_name === quizForm.subject
+                (subject) =>
+                    subject.subject_name === quizForm.subject &&
+                    String(subject.course_name || "").trim() === quizForm.course.trim() &&
+                    String(subject.degree_name || "").trim() === quizForm.degree.trim()
             );
 
             if (!selectedSubject) {
                 throw new Error(
-                    "Please select a subject registered by the administrator."
+                    "Please select a subject assigned to the selected Course and Degree in the Admin Dashboard."
                 );
+            }
+
+            const hasValidAcademicGroup = academicOptions.some(
+                (option) =>
+                    option.course === quizForm.course &&
+                    option.degree === quizForm.degree &&
+                    option.batch === quizForm.batch
+            );
+
+            if (!hasValidAcademicGroup) {
+                throw new Error(
+                    "Please select a Course, Degree and Batch registered in Admissions."
+                );
+            }
+
+            if (!quizForm.available_at || Number.isNaN(new Date(quizForm.available_at).getTime())) {
+                throw new Error("Please select a valid availability date and time.");
             }
 
             const payload = {
                 ...quizForm,
+                course: quizForm.course,
+                degree: quizForm.degree,
+                batch: quizForm.batch,
                 subject: selectedSubject.subject_name,
                 // Convert the selected local time to UTC before sending it to Laravel.
                 available_at: new Date(quizForm.available_at).toISOString(),
-                grade: Number(quizForm.grade),
+                // Temporary compatibility with the current backend's required legacy field.
+                // This will be removed when the grade database column is migrated.
+                grade: 1,
                 duration_minutes: Number(quizForm.duration_minutes),
                 questions: questions.map((question) => ({
                     ...question,
@@ -487,6 +560,9 @@ function App() {
             setSubjects([]);
             setSubjectsError("");
             setSubjectsLoading(false);
+            setAcademicOptions([]);
+            setAcademicOptionsError("");
+            setAcademicOptionsLoading(false);
             setView("dashboard");
             setEmail("");
             setPassword("");
@@ -494,6 +570,37 @@ function App() {
             setNotice("");
         }
     };
+
+    const courseOptions = [...new Set(
+        academicOptions.map((option) => option.course).filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b));
+
+    const degreeOptions = [...new Set(
+        academicOptions
+            .filter((option) => option.course === quizForm.course)
+            .map((option) => option.degree)
+            .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b));
+
+    const batchOptions = [...new Set(
+        academicOptions
+            .filter(
+                (option) =>
+                    option.course === quizForm.course &&
+                    option.degree === quizForm.degree
+            )
+            .map((option) => option.batch)
+            .filter(Boolean)
+    )].sort((a, b) => a.localeCompare(b));
+
+    // Only show subjects assigned to the selected Course and Degree.
+    const subjectOptions = subjects
+        .filter(
+            (subject) =>
+                String(subject.course_name || "").trim() === quizForm.course.trim() &&
+                String(subject.degree_name || "").trim() === quizForm.degree.trim()
+        )
+        .sort((a, b) => a.subject_name.localeCompare(b.subject_name));
 
     const publishedCount = quizzes.filter(
         (quiz) => quiz.status === "published" && !isFutureScheduledQuiz(quiz)
@@ -527,7 +634,7 @@ function App() {
                             </p>
 
                             <div className="feature-list">
-                                <div>✓ &nbsp; Create grade-based quizzes</div>
+                                <div>✓ &nbsp; Create course-based quizzes</div>
                                 <div>✓ &nbsp; Manage questions and subjects</div>
                                 <div>✓ &nbsp; Publish quizzes for students</div>
                             </div>
@@ -599,7 +706,13 @@ function App() {
 
     const filteredMyQuizzes = quizzes.filter((quiz) => {
         const searchTerm = quizSearch.trim().toLowerCase();
-        const searchableText = [quiz.title, quiz.subject, `grade ${quiz.grade}`]
+        const searchableText = [
+            quiz.title,
+            quiz.subject,
+            quiz.course,
+            quiz.degree,
+            quiz.batch,
+        ]
             .filter(Boolean)
             .join(" ")
             .toLowerCase();
@@ -812,30 +925,76 @@ function App() {
                                         name="title"
                                         value={quizForm.title}
                                         onChange={handleQuizFieldChange}
-                                        placeholder="e.g. Grade 6 Science Quiz"
+                                        placeholder="e.g. Software Engineering Fundamentals Quiz"
                                         maxLength={255}
                                         required
                                     />
                                 </div>
 
                                 <div className="builder-field">
-                                    <label htmlFor="quiz-grade">Grade *</label>
+                                    <label htmlFor="quiz-course">Course *</label>
                                     <select
-                                        id="quiz-grade"
-                                        name="grade"
-                                        value={quizForm.grade}
+                                        id="quiz-course"
+                                        name="course"
+                                        value={quizForm.course}
                                         onChange={handleQuizFieldChange}
                                         required
+                                        disabled={academicOptionsLoading || courseOptions.length === 0}
                                     >
-                                        {Array.from({ length: 13 }, (_, index) => index + 1).map(
-                                            (grade) => (
-                                                <option key={grade} value={grade}>
-                                                    Grade {grade}
-                                                </option>
-                                            )
-                                        )}
+                                        <option value="">
+                                            {academicOptionsLoading
+                                                ? "Loading registered courses..."
+                                                : courseOptions.length === 0
+                                                    ? "No active admission records found"
+                                                    : "Select a course"}
+                                        </option>
+                                        {courseOptions.map((course) => (
+                                            <option key={course} value={course}>{course}</option>
+                                        ))}
                                     </select>
                                 </div>
+
+                                <div className="builder-field">
+                                    <label htmlFor="quiz-degree">Degree *</label>
+                                    <select
+                                        id="quiz-degree"
+                                        name="degree"
+                                        value={quizForm.degree}
+                                        onChange={handleQuizFieldChange}
+                                        required
+                                        disabled={!quizForm.course || degreeOptions.length === 0}
+                                    >
+                                        <option value="">Select a degree</option>
+                                        {degreeOptions.map((degree) => (
+                                            <option key={degree} value={degree}>{degree}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                <div className="builder-field">
+                                    <label htmlFor="quiz-batch">Batch *</label>
+                                    <select
+                                        id="quiz-batch"
+                                        name="batch"
+                                        value={quizForm.batch}
+                                        onChange={handleQuizFieldChange}
+                                        required
+                                        disabled={!quizForm.course || !quizForm.degree || batchOptions.length === 0}
+                                    >
+                                        <option value="">Select a batch</option>
+                                        {batchOptions.map((batch) => (
+                                            <option key={batch} value={batch}>{batch}</option>
+                                        ))}
+                                    </select>
+                                </div>
+
+                                {academicOptionsError && (
+                                    <div className="builder-field builder-field-full">
+                                        <small className="subject-field-message" role="alert">
+                                            {academicOptionsError}
+                                        </small>
+                                    </div>
+                                )}
 
                                 <div className="builder-field">
                                     <label htmlFor="quiz-subject">Subject *</label>
@@ -845,23 +1004,36 @@ function App() {
                                         value={quizForm.subject}
                                         onChange={handleQuizFieldChange}
                                         required
-                                        disabled={subjectsLoading || subjects.length === 0}
+                                        disabled={
+                                            subjectsLoading ||
+                                            !quizForm.course ||
+                                            !quizForm.degree ||
+                                            subjectOptions.length === 0
+                                        }
                                     >
                                         <option value="">
                                             {subjectsLoading
                                                 ? "Loading registered subjects..."
-                                                : subjects.length === 0
-                                                    ? "No subjects registered by Admin"
-                                                    : "Select a subject"}
+                                                : subjectsError
+                                                    ? "Unable to load subjects"
+                                                    : subjects.length === 0
+                                                        ? "No subjects registered by Admin"
+                                                        : !quizForm.course
+                                                            ? "Select a course first"
+                                                            : !quizForm.degree
+                                                                ? "Select a degree first"
+                                                                : subjectOptions.length === 0
+                                                                    ? "No subjects assigned to this Course and Degree"
+                                                                    : "Select a subject"}
                                         </option>
-                                        {subjects.map((subject) => (
+                                        {subjectOptions.map((subject) => (
                                             <option key={subject.id} value={subject.subject_name}>
                                                 {subject.subject_name}
                                             </option>
                                         ))}
                                     </select>
                                     <small className="subject-input-hint">
-                                        Only subjects registered in the Admin Dashboard are available here.
+                                        Subjects are filtered by the selected Course and Degree. Register or assign subjects in the Admin Dashboard if the list is empty.
                                     </small>
                                     {subjectsError && (
                                         <small className="subject-field-message" role="alert">
@@ -1093,7 +1265,8 @@ function App() {
                         ) : (
                             <div className="quiz-preview-content">
                                 <div className="quiz-preview-summary">
-                                    <div><span>Grade</span><strong>Grade {previewQuiz.grade}</strong></div>
+                                    <div><span>Course</span><strong>{previewQuiz.course || "Not set"}</strong></div>
+                                    <div><span>Degree / Batch</span><strong>{previewQuiz.degree || "Not set"} · {previewQuiz.batch || "Not set"}</strong></div>
                                     <div><span>Subject</span><strong>{previewQuiz.subject}</strong></div>
                                     <div><span>Duration</span><strong>{previewQuiz.duration_minutes} minutes</strong></div>
                                     <div><span>Status</span><strong className={`preview-status ${isFutureScheduledQuiz(previewQuiz) ? "is-scheduled" : previewQuiz.status === "published" ? "is-published" : "is-draft"}`}>{isFutureScheduledQuiz(previewQuiz) ? "scheduled" : previewQuiz.status}</strong></div>
@@ -1196,7 +1369,7 @@ function App() {
                                         <tr>
                                             <th>Student</th>
                                             <th>Quiz</th>
-                                            <th>Grade</th>
+                                            <th>Academic group</th>
                                             <th>Subject</th>
                                             <th>Submitted at</th>
                                             <th>Answers</th>
@@ -1222,9 +1395,12 @@ function App() {
                                                             </span>
                                                     </td>
                                                     <td>
-                                                            <span className="grade-pill">
-                                                                {attempt.quiz?.grade ? `Grade ${attempt.quiz.grade}` : "—"}
-                                                            </span>
+                                                        <strong>{attempt.quiz?.course || "—"}</strong>
+                                                        <span className="table-subtitle">
+                                                            {[attempt.quiz?.degree, attempt.quiz?.batch]
+                                                                .filter(Boolean)
+                                                                .join(" · ") || "Academic group not set"}
+                                                        </span>
                                                     </td>
                                                     <td>{attempt.quiz?.subject || "—"}</td>
                                                     <td className="scheduled-date-cell">
@@ -1340,7 +1516,7 @@ function App() {
                                         type="search"
                                         value={quizSearch}
                                         onChange={(event) => setQuizSearch(event.target.value)}
-                                        placeholder="Search by quiz title, subject, or grade..."
+                                        placeholder="Search by title, subject, course, degree, or batch..."
                                     />
                                 </div>
 
@@ -1404,7 +1580,7 @@ function App() {
                                     <thead>
                                     <tr>
                                         <th>Quiz title</th>
-                                        <th>Grade</th>
+                                        <th>Academic group</th>
                                         <th>Subject</th>
                                         {view === "scheduled" && <th>Available from</th>}
                                         <th>Questions</th>
@@ -1422,9 +1598,10 @@ function App() {
                           </span>
                                             </td>
                                             <td>
-                          <span className="grade-pill">
-                            Grade {quiz.grade}
-                          </span>
+                                                <strong>{quiz.course || "Course not set"}</strong>
+                                                <span className="table-subtitle">
+                                                    {[quiz.degree, quiz.batch].filter(Boolean).join(" · ") || "Academic group not set"}
+                                                </span>
                                             </td>
                                             <td>{quiz.subject}</td>
                                             {view === "scheduled" && (
@@ -1505,3 +1682,4 @@ function App() {
 }
 
 export default App;
+

@@ -205,6 +205,30 @@
         }
 
 
+        .courses-card {
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #8b5cf6,
+                    #6d28d9
+                );
+
+        }
+
+
+        .degrees-card {
+
+            background:
+                linear-gradient(
+                    135deg,
+                    #0ea5e9,
+                    #0369a1
+                );
+
+        }
+
+
         /* =====================================================
            CARD FOOTER
         ===================================================== */
@@ -478,7 +502,7 @@
 
             <!-- STUDENTS -->
 
-            <div class="col-xl col-lg-4 col-md-6">
+            <div class="col-xl-3 col-lg-4 col-md-6">
 
                 <div class="stat-card students-card">
 
@@ -534,7 +558,7 @@
 
             <!-- ADMISSIONS -->
 
-            <div class="col-xl col-lg-4 col-md-6">
+            <div class="col-xl-3 col-lg-4 col-md-6">
 
                 <div class="stat-card admissions-card">
 
@@ -590,7 +614,7 @@
 
             <!-- TEACHERS -->
 
-            <div class="col-xl col-lg-4 col-md-6">
+            <div class="col-xl-3 col-lg-4 col-md-6">
 
                 <div class="stat-card teachers-card">
 
@@ -646,7 +670,7 @@
 
             <!-- SUBJECTS -->
 
-            <div class="col-xl col-lg-4 col-md-6">
+            <div class="col-xl-3 col-lg-4 col-md-6">
 
                 <div class="stat-card subjects-card">
 
@@ -700,9 +724,85 @@
             </div>
 
 
+            <!-- COURSES -->
+
+            <div class="col-xl-3 col-lg-4 col-md-6">
+
+                <div class="stat-card courses-card">
+
+                    <div class="stat-card-body">
+
+                        <div class="stat-number">
+                            {{ $courses }}
+                        </div>
+
+                        <div class="stat-label">
+                            Total Courses
+                        </div>
+
+                        <div class="stat-description">
+                            Registered campus courses
+                        </div>
+
+                        <div class="stat-icon">
+                            <i class="bi bi-mortarboard-fill"></i>
+                        </div>
+
+                    </div>
+
+                    <div class="stat-card-footer">
+                        <a href="{{ route('courses.index') }}">
+                            View Courses
+                        </a>
+                        <span class="footer-arrow">→</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <!-- DEGREES -->
+
+            <div class="col-xl-3 col-lg-4 col-md-6">
+
+                <div class="stat-card degrees-card">
+
+                    <div class="stat-card-body">
+
+                        <div class="stat-number">
+                            {{ $degrees }}
+                        </div>
+
+                        <div class="stat-label">
+                            Total Degrees
+                        </div>
+
+                        <div class="stat-description">
+                            Registered campus degrees
+                        </div>
+
+                        <div class="stat-icon">
+                            <i class="bi bi-mortarboard"></i>
+                        </div>
+
+                    </div>
+
+                    <div class="stat-card-footer">
+                        <a href="{{ route('degrees.index') }}">
+                            View Degrees
+                        </a>
+                        <span class="footer-arrow">→</span>
+                    </div>
+
+                </div>
+
+            </div>
+
+
             <!-- EXAMS -->
 
-            <div class="col-xl col-lg-4 col-md-6">
+            <div class="col-xl-3 col-lg-4 col-md-6">
 
                 <div class="stat-card exams-card">
 
@@ -852,6 +952,60 @@
                             </div>
 
                         </span>
+
+                        </a>
+
+                    </div>
+
+
+                    <!-- COURSES -->
+
+                    <div class="col-lg-3 col-md-6">
+
+                        <a
+                            href="{{ route('courses.index') }}"
+                            class="quick-action">
+
+                            <span class="quick-action-icon">
+                                <i class="bi bi-mortarboard-fill"></i>
+                            </span>
+
+                            <span>
+                                <div class="quick-action-title">
+                                    Manage Courses
+                                </div>
+
+                                <div class="quick-action-text">
+                                    Add and update campus courses
+                                </div>
+                            </span>
+
+                        </a>
+
+                    </div>
+
+
+                    <!-- DEGREES -->
+
+                    <div class="col-lg-3 col-md-6">
+
+                        <a
+                            href="{{ route('degrees.index') }}"
+                            class="quick-action">
+
+                            <span class="quick-action-icon">
+                                <i class="bi bi-mortarboard"></i>
+                            </span>
+
+                            <span>
+                                <div class="quick-action-title">
+                                    Manage Degrees
+                                </div>
+
+                                <div class="quick-action-text">
+                                    Add and update campus degrees
+                                </div>
+                            </span>
 
                         </a>
 

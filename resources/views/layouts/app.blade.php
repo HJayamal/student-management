@@ -537,6 +537,19 @@
         }
 
 
+        /* -----------------------------------------------------
+           Academic Setup sidebar heading
+        ----------------------------------------------------- */
+
+        .sidebar-menu .nav-header {
+            padding: 18px 13px 8px;
+            margin: 8px 0 4px;
+            color: #94a3b8;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.2px;
+        }
+
         /* =====================================================
            MAIN CONTENT
         ===================================================== */
@@ -986,6 +999,45 @@
 
                     </li>
 
+
+                    <!-- ===================================
+                         ACADEMIC SETUP
+                    ==================================== -->
+
+                    <li class="nav-header">ACADEMIC SETUP</li>
+
+                    <li class="nav-item">
+                        <a
+                            href="{{ route('courses.index') }}"
+                            class="nav-link {{ request()->routeIs('courses.*') ? 'active' : '' }}">
+
+                            <i class="nav-icon bi bi-mortarboard-fill"></i>
+
+                            <p>Courses</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a
+                            href="{{ route('degrees.index') }}"
+                            class="nav-link {{ request()->routeIs('degrees.*') ? 'active' : '' }}">
+
+                            <i class="nav-icon bi bi-award-fill"></i>
+
+                            <p>Degrees</p>
+                        </a>
+                    </li>
+
+                    <li class="nav-item">
+                        <a
+                            href="{{ route('batches.index') }}"
+                            class="nav-link {{ request()->routeIs('batches.*') ? 'active' : '' }}">
+
+                            <i class="nav-icon bi bi-layers-fill"></i>
+
+                            <p>Batches</p>
+                        </a>
+                    </li>
 
                     <!-- ===================================
                          SUBJECTS

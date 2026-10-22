@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Laravel\Sanctum\HasApiTokens;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Student extends Authenticatable
 {
@@ -28,4 +29,9 @@ class Student extends Authenticatable
     protected $hidden = [
         'password',
     ];
+
+    public function admission(): HasOne
+    {
+        return $this->hasOne(Admission::class, 'reg_no', 'reg_no');
+    }
 }
