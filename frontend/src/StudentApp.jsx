@@ -14,6 +14,16 @@ function StudentApp() {
     const [loadingQuizzes, setLoadingQuizzes] = useState(false);
     const [quizError, setQuizError] = useState("");
     const [quizNotice, setQuizNotice] = useState("");
+    const [activeQuiz, setActiveQuiz] = useState(null);
+    const [activeQuestions, setActiveQuestions] = useState([]);
+    const [selectedAnswers, setSelectedAnswers] = useState({});
+    const [loadingQuizId, setLoadingQuizId] = useState(null);
+    const [submittingAttempt, setSubmittingAttempt] = useState(false);
+    const [attemptError, setAttemptError] = useState("");
+    const [attemptSubmitted, setAttemptSubmitted] = useState(false);
+    const [attemptReceipt, setAttemptReceipt] = useState(null);
+    const [attemptResult, setAttemptResult] = useState(null);
+    const [attemptMessage, setAttemptMessage] = useState("");
 
     const loadStudentQuizzes = useCallback(async () => {
         if (!localStorage.getItem("student_token")) {
@@ -47,6 +57,90 @@ function StudentApp() {
             setLoadingQuizzes(false);
         }
     }, []);
+
+    const handleStartQuiz = async (quiz) => {
+        if (!quiz?.is_available || loadingQuizId !== null) return;
+
+        setLoadingQuizId(quiz.id);
+        setAttemptError("");
+        setAttemptMessage("");
+        setAttemptReceipt(null);
+        setAttemptResult(null);
+        setAttemptSubmitted(false);
+
+        try {
+            const response = await studentApi.get(`/student/quizzes/${quiz.id}`);
+            const data = response.data || {};
+            const questions = Array.isArray(data.questions) ? data.questions : [];
+
+            setActiveQuiz(data.quiz || quiz);
+            setActiveQuestions(questions);
+            setSelectedAnswers({});
+
+            if (questions.length === 0) {
+                setAttemptError("This quiz does not have any questions yet. Please ask your teacher to add questions.");
+            }
+        } catch (err) {
+            setQuizError(
+                err.response?.data?.message ||
+                "Unable to open this quiz. Please refresh and try again."
+            );
+            setActiveQuiz(null);
+            setActiveQuestions([]);
+        } finally {
+            setLoadingQuizId(null);
+        }
+    };
+
+    const handleSubmitQuiz = async (event) => {
+        event.preventDefault();
+        if (!activeQuiz || submittingAttempt || attemptSubmitted) return;
+
+        const unanswered = activeQuestions.filter(
+            (question) => !selectedAnswers[question.id]
+        );
+
+        if (unanswered.length > 0) {
+            setAttemptError(`Please answer all questions before submitting. ${unanswered.length} question(s) remain unanswered.`);
+            return;
+        }
+
+        setSubmittingAttempt(true);
+        setAttemptError("");
+
+        try {
+            const response = await studentApi.post(
+                `/student/quizzes/${activeQuiz.id}/submit`,
+                { answers: selectedAnswers }
+            );
+
+            setAttemptReceipt(response.data?.attempt || null);
+            setAttemptResult(response.data?.result || null);
+            setAttemptMessage(
+                response.data?.message || "Your answers were submitted successfully."
+            );
+            setAttemptSubmitted(true);
+        } catch (err) {
+            setAttemptError(
+                err.response?.data?.message ||
+                "Unable to submit your answers. Please try again."
+            );
+        } finally {
+            setSubmittingAttempt(false);
+        }
+    };
+
+    const handleReturnToQuizList = () => {
+        setActiveQuiz(null);
+        setActiveQuestions([]);
+        setSelectedAnswers({});
+        setAttemptError("");
+        setAttemptMessage("");
+        setAttemptReceipt(null);
+        setAttemptResult(null);
+        setAttemptSubmitted(false);
+        loadStudentQuizzes();
+    };
 
     const formatQuizDate = (value) => {
         if (!value) return "Available now";
@@ -120,6 +214,12 @@ function StudentApp() {
             setQuizzes([]);
             setQuizError("");
             setQuizNotice("");
+            setActiveQuiz(null);
+            setActiveQuestions([]);
+            setSelectedAnswers({});
+            setAttemptSubmitted(false);
+            setAttemptReceipt(null);
+            setAttemptError("");
             setError(
                 err.response?.data?.message ||
                 "Unable to sign in. Check your student account details and try again."
@@ -143,6 +243,12 @@ function StudentApp() {
             setQuizzes([]);
             setQuizError("");
             setQuizNotice("");
+            setActiveQuiz(null);
+            setActiveQuestions([]);
+            setSelectedAnswers({});
+            setAttemptSubmitted(false);
+            setAttemptReceipt(null);
+            setAttemptError("");
             setEmail("");
             setPassword("");
             setError("");
@@ -306,124 +412,264 @@ function StudentApp() {
                     </section>
                 )}
 
-                <section className="student-quizzes-section" aria-labelledby="student-quizzes-heading">
-                    <div className="student-quizzes-header">
-                        <div className="student-quiz-placeholder-icon" aria-hidden="true">▤</div>
-                        <div className="student-quizzes-heading-copy">
-                            <h2 id="student-quizzes-heading">My quizzes</h2>
-                            <p>Quizzes assigned to your registered course, degree and batch.</p>
+                {activeQuiz ? (
+                    <section className="student-quiz-attempt-panel" aria-labelledby="active-quiz-title">
+                        <div className="student-quiz-attempt-header">
+                            <button
+                                type="button"
+                                className="student-quiz-back-button"
+                                onClick={handleReturnToQuizList}
+                            >
+                                ← Back to My Quizzes
+                            </button>
+                            <span className="student-eyebrow">QUIZ ATTEMPT</span>
+                            <h2 id="active-quiz-title">{activeQuiz.title || "Quiz"}</h2>
+                            <p>{activeQuiz.subject || "General subject"} · {activeQuiz.duration_minutes ?? "—"} minutes</p>
                         </div>
-                        <button
-                            type="button"
-                            className="student-quizzes-refresh"
-                            onClick={loadStudentQuizzes}
-                            disabled={loadingQuizzes}
-                        >
-                            {loadingQuizzes ? "Loading..." : "Refresh"}
-                        </button>
-                    </div>
 
-                    {loadingQuizzes && (
-                        <div className="student-quiz-message" role="status">
-                            Loading your quizzes...
-                        </div>
-                    )}
+                        {attemptError && (
+                            <div className="student-quiz-error" role="alert">
+                                {attemptError}
+                            </div>
+                        )}
 
-                    {!loadingQuizzes && quizError && (
-                        <div className="student-quiz-error" role="alert">
-                            {quizError}
-                        </div>
-                    )}
-
-                    {!loadingQuizzes && !quizError && quizNotice && (
-                        <div className="student-quiz-notice" role="status">
-                            {quizNotice}
-                        </div>
-                    )}
-
-                    {!loadingQuizzes && !quizError && quizzes.length === 0 && (
-                        <div className="student-quiz-empty">
-                            <div className="student-quiz-empty-icon" aria-hidden="true">✓</div>
-                            <h3>No matching quizzes yet</h3>
-                            <p>
-                                Published quizzes assigned to your academic group will appear here.
-                                If your teacher has already scheduled one, ask them to check that
-                                its course, degree and batch match your academic profile.
-                            </p>
-                        </div>
-                    )}
-
-                    {quizzes.length > 0 && (
-                        <div className="student-quiz-grid">
-                            {quizzes.map((quiz) => {
-                                const isAvailable = Boolean(quiz.is_available);
-
-                                return (
-                                    <article className="student-quiz-card" key={quiz.id}>
-                                        <div className="student-quiz-card-top">
-                                            <div className="student-quiz-title-group">
-                                                <h3>{quiz.title || "Untitled quiz"}</h3>
-                                                <p>{quiz.subject || "General subject"}</p>
+                        {attemptSubmitted ? (
+                            <div className="student-quiz-submission-success" role="status">
+                                <div className="student-quiz-success-icon">✓</div>
+                                <h3>Answers submitted successfully</h3>
+                                <p>{attemptMessage}</p>
+                                {attemptReceipt?.id && (
+                                    <p className="student-quiz-receipt">Submission reference: #{attemptReceipt.id}</p>
+                                )}
+                                {attemptResult ? (
+                                    <>
+                                        <div className="student-quiz-result-grid" aria-label="Quiz result">
+                                            <div className="student-quiz-result-item">
+                                                <span>Marks obtained</span>
+                                                <strong>{attemptResult.marks_obtained ?? "—"}</strong>
                                             </div>
-                                            <span className={`student-quiz-status ${isAvailable ? "available" : "upcoming"}`}>
+                                            <div className="student-quiz-result-item">
+                                                <span>Total marks</span>
+                                                <strong>{attemptResult.total_marks ?? "—"}</strong>
+                                            </div>
+                                            <div className="student-quiz-result-item">
+                                                <span>Percentage</span>
+                                                <strong>{attemptResult.percentage != null ? `${Number(attemptResult.percentage).toFixed(2)}%` : "—"}</strong>
+                                            </div>
+                                        </div>
+                                        <p className="student-quiz-marking-note">Your answers have been marked automatically.</p>
+                                    </>
+                                ) : (
+                                    <p className="student-quiz-marking-note">
+                                        Your answers were saved, but the server did not return a score. Please check the quiz submission API response.
+                                    </p>
+                                )}
+                                <button
+                                    type="button"
+                                    className="student-quiz-submit-button"
+                                    onClick={handleReturnToQuizList}
+                                >
+                                    Back to My Quizzes
+                                </button>
+                            </div>
+                        ) : activeQuestions.length === 0 ? (
+                            <div className="student-quiz-empty">
+                                <h3>No questions available</h3>
+                                <p>This quiz has no questions to attempt yet.</p>
+                                <button
+                                    type="button"
+                                    className="student-quiz-back-button"
+                                    onClick={handleReturnToQuizList}
+                                >
+                                    Back to My Quizzes
+                                </button>
+                            </div>
+                        ) : (
+                            <form className="student-quiz-attempt-form" onSubmit={handleSubmitQuiz}>
+                                <div className="student-quiz-instructions">
+                                    <div>
+                                        <strong>{activeQuestions.length} question{activeQuestions.length === 1 ? "" : "s"}</strong>
+                                        <span>Select one answer for every question, then submit.</span>
+                                    </div>
+                                    <div className="student-quiz-duration-pill">
+                                        <span>Duration</span>
+                                        <strong>{activeQuiz.duration_minutes ?? "—"} min</strong>
+                                    </div>
+                                </div>
+
+                                {activeQuestions.map((question, index) => (
+                                    <fieldset className="student-question-card" key={question.id}>
+                                        <legend>
+                                            <span className="student-question-number">Question {index + 1}</span>
+                                            <span className="student-question-marks">{question.marks ?? 1} mark{Number(question.marks ?? 1) === 1 ? "" : "s"}</span>
+                                            <span className="student-question-text">{question.question_text}</span>
+                                        </legend>
+                                        <div className="student-question-options">
+                                            {Object.entries(question.options || {})
+                                                .filter(([, optionText]) => optionText !== null && optionText !== undefined && String(optionText).trim() !== "")
+                                                .map(([optionKey, optionText]) => (
+                                                    <label
+                                                        className={`student-question-option ${selectedAnswers[question.id] === optionKey ? "selected" : ""}`}
+                                                        key={optionKey}
+                                                    >
+                                                        <input
+                                                            type="radio"
+                                                            name={`question-${question.id}`}
+                                                            value={optionKey}
+                                                            checked={selectedAnswers[question.id] === optionKey}
+                                                            onChange={() => setSelectedAnswers((current) => ({
+                                                                ...current,
+                                                                [question.id]: optionKey,
+                                                            }))}
+                                                            disabled={submittingAttempt}
+                                                        />
+                                                        <span className="student-question-option-key">{optionKey}</span>
+                                                        <span className="student-question-option-text">{optionText}</span>
+                                                    </label>
+                                                ))}
+                                        </div>
+                                    </fieldset>
+                                ))}
+
+                                <div className="student-quiz-submit-row">
+                                    <span>{Object.keys(selectedAnswers).length} of {activeQuestions.length} answered</span>
+                                    <button
+                                        type="submit"
+                                        className="student-quiz-submit-button"
+                                        disabled={submittingAttempt}
+                                    >
+                                        {submittingAttempt ? "Submitting..." : "Submit Answers"}
+                                    </button>
+                                </div>
+                            </form>
+                        )}
+                    </section>
+                ) : (
+                    <section className="student-quizzes-section" aria-labelledby="student-quizzes-heading">
+                        <div className="student-quizzes-header">
+                            <div className="student-quiz-placeholder-icon" aria-hidden="true">▤</div>
+                            <div className="student-quizzes-heading-copy">
+                                <h2 id="student-quizzes-heading">My quizzes</h2>
+                                <p>Quizzes assigned to your registered course, degree and batch.</p>
+                            </div>
+                            <button
+                                type="button"
+                                className="student-quizzes-refresh"
+                                onClick={loadStudentQuizzes}
+                                disabled={loadingQuizzes}
+                            >
+                                {loadingQuizzes ? "Loading..." : "Refresh"}
+                            </button>
+                        </div>
+
+                        {loadingQuizzes && (
+                            <div className="student-quiz-message" role="status">
+                                Loading your quizzes...
+                            </div>
+                        )}
+
+                        {!loadingQuizzes && quizError && (
+                            <div className="student-quiz-error" role="alert">
+                                {quizError}
+                            </div>
+                        )}
+
+                        {!loadingQuizzes && !quizError && quizNotice && (
+                            <div className="student-quiz-notice" role="status">
+                                {quizNotice}
+                            </div>
+                        )}
+
+                        {!loadingQuizzes && !quizError && quizzes.length === 0 && (
+                            <div className="student-quiz-empty">
+                                <div className="student-quiz-empty-icon" aria-hidden="true">✓</div>
+                                <h3>No matching quizzes yet</h3>
+                                <p>
+                                    Published quizzes assigned to your academic group will appear here.
+                                    If your teacher has already scheduled one, ask them to check that
+                                    its course, degree and batch match your academic profile.
+                                </p>
+                            </div>
+                        )}
+
+                        {quizzes.length > 0 && (
+                            <div className="student-quiz-grid">
+                                {quizzes.map((quiz) => {
+                                    const isAvailable = Boolean(quiz.is_available);
+
+                                    return (
+                                        <article className="student-quiz-card" key={quiz.id}>
+                                            <div className="student-quiz-card-top">
+                                                <div className="student-quiz-title-group">
+                                                    <h3>{quiz.title || "Untitled quiz"}</h3>
+                                                    <p>{quiz.subject || "General subject"}</p>
+                                                </div>
+                                                <span className={`student-quiz-status ${isAvailable ? "available" : "upcoming"}`}>
                                                 {isAvailable ? "Available" : "Upcoming"}
                                             </span>
-                                        </div>
-
-                                        {quiz.description && (
-                                            <p className="student-quiz-description">{quiz.description}</p>
-                                        )}
-
-                                        <div className="student-quiz-meta">
-                                            <div>
-                                                <span>Duration</span>
-                                                <strong>{quiz.duration_minutes ?? "—"} minutes</strong>
                                             </div>
-                                            <div>
-                                                <span>Questions</span>
-                                                <strong>{quiz.questions_count ?? 0}</strong>
-                                            </div>
-                                            <div>
-                                                <span>Batch</span>
-                                                <strong>{quiz.batch || "—"}</strong>
-                                            </div>
-                                            <div>
-                                                <span>Available date</span>
-                                                <strong>{formatQuizDate(quiz.available_at)}</strong>
-                                            </div>
-                                        </div>
 
-                                        <p className="student-quiz-academic">
-                                            {[quiz.course, quiz.degree].filter(Boolean).join(" · ")}
-                                        </p>
+                                            {quiz.description && (
+                                                <p className="student-quiz-description">{quiz.description}</p>
+                                            )}
 
-                                        {!isAvailable && (
-                                            <p className="student-quiz-upcoming-note">
-                                                This quiz will be available at its scheduled time.
+                                            <div className="student-quiz-meta">
+                                                <div>
+                                                    <span>Duration</span>
+                                                    <strong>{quiz.duration_minutes ?? "—"} minutes</strong>
+                                                </div>
+                                                <div>
+                                                    <span>Questions</span>
+                                                    <strong>{quiz.questions_count ?? 0}</strong>
+                                                </div>
+                                                <div>
+                                                    <span>Batch</span>
+                                                    <strong>{quiz.batch || "—"}</strong>
+                                                </div>
+                                                <div>
+                                                    <span>Available date</span>
+                                                    <strong>{formatQuizDate(quiz.available_at)}</strong>
+                                                </div>
+                                            </div>
+
+                                            <p className="student-quiz-academic">
+                                                {[quiz.course, quiz.degree].filter(Boolean).join(" · ")}
                                             </p>
-                                        )}
 
-                                        <div className="student-quiz-card-footer">
+                                            {!isAvailable && (
+                                                <p className="student-quiz-upcoming-note">
+                                                    This quiz will be available at its scheduled time.
+                                                </p>
+                                            )}
+
+                                            <div className="student-quiz-card-footer">
                                             <span>
                                                 {isAvailable
                                                     ? "You can start this quiz when quiz-taking is enabled."
                                                     : "Not available yet"}
                                             </span>
-                                            <button
-                                                type="button"
-                                                className="student-quiz-start-button"
-                                                disabled
-                                                title={isAvailable ? "Quiz attempt interface is not implemented yet" : "This quiz is not available yet"}
-                                            >
-                                                {isAvailable ? "Attempt coming soon" : "Upcoming"}
-                                            </button>
-                                        </div>
-                                    </article>
-                                );
-                            })}
-                        </div>
-                    )}
-                </section>
+                                                <button
+                                                    type="button"
+                                                    className="student-quiz-start-button"
+                                                    onClick={() => handleStartQuiz(quiz)}
+                                                    disabled={!isAvailable || loadingQuizId !== null}
+                                                    title={isAvailable ? "Open this quiz" : "This quiz is not available yet"}
+                                                >
+                                                    {loadingQuizId === quiz.id
+                                                        ? "Opening..."
+                                                        : isAvailable
+                                                            ? "Start Quiz"
+                                                            : "Upcoming"}
+                                                </button>
+                                            </div>
+                                        </article>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </section>
+
+                )}
 
                 <footer className="student-dashboard-footer">QuizSpace Student Portal · Powered by Laravel</footer>
             </main>

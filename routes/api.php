@@ -60,7 +60,13 @@ Route::middleware('auth:sanctum')->group(function () {
         [StudentQuizController::class, 'index']
     );
 
-    // Submit a quiz attempt
+    // Start Quiz: retrieve quiz details and questions
+    Route::get(
+        '/student/quizzes/{quizId}',
+        [StudentQuizController::class, 'show']
+    );
+
+    // Submit quiz answers
     Route::post(
         '/student/quizzes/{quizId}/submit',
         [QuizAttemptController::class, 'store']
@@ -136,7 +142,7 @@ Route::middleware('auth:sanctum')->group(function () {
             ],
         ]);
 
-        // Get the course linked to the selected degree
+        // Get the course linked to the selected degree.
         $degree = DB::table('degrees')
             ->join(
                 'courses',
@@ -157,7 +163,7 @@ Route::middleware('auth:sanctum')->group(function () {
             ], 422);
         }
 
-        // Generate a unique subject code
+        // Generate a unique subject code.
         do {
             $subjectCode = 'SUB-' . strtoupper(Str::random(8));
         } while (
