@@ -263,3 +263,142 @@
     .student-question-card { padding: 16px; }
     .student-quiz-submit-row { align-items: flex-start; flex-direction: column; }
 }
+
+
+/* My Results navigation and section */
+button.student-nav-item {
+    appearance: none;
+    width: 100%;
+    border: 0;
+    background: transparent;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+}
+
+button.student-nav-item:focus-visible {
+    outline: 2px solid currentColor;
+    outline-offset: 3px;
+}
+
+.student-results-section {
+    scroll-margin-top: 24px;
+}
+
+.student-results-meta > div {
+    min-width: 0;
+}
+
+.student-results-meta strong {
+    overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+    .student-results-section .student-quizzes-header {
+        align-items: flex-start;
+        flex-wrap: wrap;
+    }
+
+    .student-results-section .student-quizzes-heading-copy {
+        flex: 1 1 calc(100% - 65px);
+    }
+
+    .student-results-section .student-quizzes-refresh {
+        margin-left: 62px;
+    }
+}
+
+
+/* My Results performance summary cards */
+.student-results-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+    margin: 24px 0 18px;
+}
+
+.student-results-stat-card {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    min-width: 0;
+    padding: 22px;
+    border: 1px solid #e5eaf4;
+    border-radius: 18px;
+    background: #fff;
+    box-shadow: 0 6px 20px rgba(29, 40, 77, .035);
+    transition: transform .2s ease, box-shadow .2s ease;
+}
+
+.student-results-stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 12px 28px rgba(29, 40, 77, .07);
+}
+
+.student-results-stat-icon {
+    display: grid;
+    flex: 0 0 auto;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: 15px;
+    font-size: 23px;
+    font-weight: 800;
+}
+
+.student-results-stat-attempts .student-results-stat-icon {
+    color: #5965e9;
+    background: #eff0ff;
+}
+
+.student-results-stat-average .student-results-stat-icon {
+    color: #0b8b83;
+    background: #e3f8f4;
+}
+
+.student-results-stat-best .student-results-stat-icon {
+    color: #8b50d8;
+    background: #f5eefe;
+}
+
+.student-results-stat-copy {
+    display: grid;
+    gap: 5px;
+    min-width: 0;
+}
+
+.student-results-stat-copy > span {
+    color: #7f8ba3;
+    font-size: 11px;
+    font-weight: 750;
+}
+
+.student-results-stat-copy > strong {
+    color: #202a46;
+    font-size: clamp(22px, 2.2vw, 28px);
+    font-weight: 850;
+    line-height: 1.2;
+    letter-spacing: -.6px;
+    overflow-wrap: anywhere;
+}
+
+.student-results-stat-copy > small {
+    color: #9aa4b7;
+    font-size: 10px;
+    line-height: 1.45;
+}
+
+@media (max-width: 900px) {
+    .student-results-summary {
+        grid-template-columns: 1fr;
+        gap: 12px;
+    }
+
+    .student-results-stat-card {
+        padding: 17px 19px;
+    }
+
+    .student-results-stat-copy > strong {
+        font-size: 24px;
+    }
+}

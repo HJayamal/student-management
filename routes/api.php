@@ -10,6 +10,7 @@ use App\Http\Controllers\APIController;
 use App\Http\Controllers\StudentAuthController;
 use App\Http\Controllers\StudentDashboardController;
 use App\Http\Controllers\StudentQuizController;
+use App\Http\Controllers\StudentResultsController;
 use App\Http\Controllers\QuizAttemptController;
 use App\Http\Controllers\TeacherAuthController;
 use App\Http\Controllers\TeacherDashboardController;
@@ -60,16 +61,22 @@ Route::middleware('auth:sanctum')->group(function () {
         [StudentQuizController::class, 'index']
     );
 
-    // Start Quiz: retrieve quiz details and questions
+    // Load a quiz and its questions
     Route::get(
         '/student/quizzes/{quizId}',
         [StudentQuizController::class, 'show']
     );
 
-    // Submit quiz answers
+    // Submit quiz answers and calculate marks
     Route::post(
         '/student/quizzes/{quizId}/submit',
         [QuizAttemptController::class, 'store']
+    );
+
+    // Get the authenticated student's quiz results
+    Route::get(
+        '/student/results',
+        [StudentResultsController::class, 'index']
     );
 
     // Student Logout
@@ -205,6 +212,7 @@ Route::middleware('auth:sanctum')->group(function () {
     |--------------------------------------------------------------------------
     | Uses Academic Setup tables:
     | courses -> degrees -> batches
+    |--------------------------------------------------------------------------
     */
 
     Route::get('/teacher/academic-options', function () {
