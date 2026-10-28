@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import studentApi from "./studentApi";
 import "./StudentApp.css";
 
@@ -24,6 +24,16 @@ function StudentApp() {
     const [attemptReceipt, setAttemptReceipt] = useState(null);
     const [attemptResult, setAttemptResult] = useState(null);
     const [attemptMessage, setAttemptMessage] = useState("");
+    const [timerDeadline, setTimerDeadline] = useState(null);
+    const [remainingSeconds, setRemainingSeconds] = useState(null);
+    const [serverAttemptSessionId, setServerAttemptSessionId] = useState(null);
+    const [answerSaveError, setAnswerSaveError] = useState("");
+    const [autoSubmitFailed, setAutoSubmitFailed] = useState(false);
+    const autoSubmitTriggeredRef = useRef(false);
+    const submitQuizRef = useRef(null);
+    const selectedAnswersRef = useRef({});
+    // Queue answer writes in order so rapid clicks cannot overwrite newer answers.
+    const answerSaveQueueRef = useRef(Promise.resolve());
     const [activeNavItem, setActiveNavItem] = useState(() =>
         window.location.pathname.replace(/\/+$/, "") === "/student/results"
             ? "results"
@@ -32,6 +42,30 @@ function StudentApp() {
     const [results, setResults] = useState([]);
     const [loadingResults, setLoadingResults] = useState(false);
     const [resultsError, setResultsError] = useState("");
+
+    const getQuizSessionKey = (quizId, suffix) =>
+        `quizspace:student:${student?.id ?? "current"}:quiz:${quizId}:${suffix}`;
+
+    const setSessionValue = (key, value) => {
+        try {
+            window.sessionStorage.setItem(key, value);
+        } catch {
+            // The quiz still works if browser session storage is unavailable.
+        }
+    };
+
+    const removeSessionValue = (key) => {
+        try {
+            window.sessionStorage.removeItem(key);
+        } catch {
+            // Ignore storage restrictions; they should not block quiz submission.
+        }
+    };
+
+    const clearQuizSession = (quizId) => {
+        removeSessionValue(getQuizSessionKey(quizId, "deadline"));
+        removeSessionValue(getQuizSessionKey(quizId, "answers"));
+    };
 
     const loadStudentResults = useCallback(async () => {
         if (!localStorage.getItem("student_token")) {
@@ -109,80 +143,246 @@ function StudentApp() {
         setAttemptReceipt(null);
         setAttemptResult(null);
         setAttemptSubmitted(false);
+        setAutoSubmitFailed(false);
+        setAnswerSaveError("");
+        setServerAttemptSessionId(null);
+        setTimerDeadline(null);
+        setRemainingSeconds(null);
+        autoSubmitTriggeredRef.current = false;
+        answerSaveQueueRef.current = Promise.resolve();
 
         try {
-            const response = await studentApi.get(`/student/quizzes/${quiz.id}`);
-            const data = response.data || {};
+            // Load the quiz first so an empty quiz does not create an attempt session.
+            const quizResponse = await studentApi.get(`/student/quizzes/${quiz.id}`);
+            const data = quizResponse.data || {};
             const questions = Array.isArray(data.questions) ? data.questions : [];
+            const quizToUse = data.quiz || quiz;
 
-            setActiveQuiz(data.quiz || quiz);
+            setActiveQuiz(quizToUse);
             setActiveQuestions(questions);
-            setSelectedAnswers({});
 
             if (questions.length === 0) {
+                selectedAnswersRef.current = {};
+                setSelectedAnswers({});
                 setAttemptError("This quiz does not have any questions yet. Please ask your teacher to add questions.");
+                return;
             }
+
+            // The server creates or resumes the one active attempt and returns its
+            // authoritative deadline. Browser storage is not trusted for timing.
+            const startResponse = await studentApi.post(`/student/quizzes/${quiz.id}/start`);
+            const serverSession = startResponse.data?.attempt_session;
+            const deadlineTimestamp = serverSession?.deadline_at
+                ? new Date(serverSession.deadline_at).getTime()
+                : NaN;
+            const serverTimestamp = startResponse.data?.server_time
+                ? new Date(startResponse.data.server_time).getTime()
+                : NaN;
+
+            if (!serverSession?.id || !Number.isFinite(deadlineTimestamp) || !Number.isFinite(serverTimestamp)) {
+                throw new Error("The server did not return a valid quiz deadline. Please refresh and try again.");
+            }
+
+            // Convert the server-provided remaining duration to a local monotonic-ish
+            // deadline. This avoids relying on the student's device clock/time zone.
+            const remainingAtResponseMs = Math.max(0, deadlineTimestamp - serverTimestamp);
+            const deadline = Date.now() + remainingAtResponseMs;
+
+            const rawSavedAnswers = serverSession.answers && typeof serverSession.answers === "object" && !Array.isArray(serverSession.answers)
+                ? serverSession.answers
+                : {};
+            const questionIds = new Set(questions.map((question) => String(question.id)));
+            const validOptions = new Set(["A", "B", "C", "D"]);
+            const restoredAnswers = Object.fromEntries(
+                Object.entries(rawSavedAnswers).filter(([questionId, option]) =>
+                    questionIds.has(String(questionId)) && validOptions.has(option)
+                )
+            );
+
+            setServerAttemptSessionId(Number(serverSession.id));
+            selectedAnswersRef.current = restoredAnswers;
+            setSelectedAnswers(restoredAnswers);
+            setTimerDeadline(deadline);
+            setRemainingSeconds(Math.max(0, Math.ceil((deadline - Date.now()) / 1000)));
+            setSessionValue(getQuizSessionKey(quizToUse.id, "deadline"), String(deadline));
+            setSessionValue(getQuizSessionKey(quizToUse.id, "answers"), JSON.stringify(restoredAnswers));
         } catch (err) {
             setQuizError(
                 err.response?.data?.message ||
+                err.message ||
                 "Unable to open this quiz. Please refresh and try again."
             );
             setActiveQuiz(null);
             setActiveQuestions([]);
+            selectedAnswersRef.current = {};
+            setSelectedAnswers({});
+            setServerAttemptSessionId(null);
+            setTimerDeadline(null);
+            setRemainingSeconds(null);
         } finally {
             setLoadingQuizId(null);
         }
     };
 
-    const handleSubmitQuiz = async (event) => {
-        event.preventDefault();
-        if (!activeQuiz || submittingAttempt || attemptSubmitted) return;
+    const submitQuiz = async (isAutoSubmit = false) => {
+        if (!activeQuiz || !serverAttemptSessionId || submittingAttempt || attemptSubmitted) return;
 
+        const currentAnswers = selectedAnswersRef.current || selectedAnswers;
         const unanswered = activeQuestions.filter(
-            (question) => !selectedAnswers[question.id]
+            (question) => !currentAnswers[question.id]
         );
 
-        if (unanswered.length > 0) {
+        if (!isAutoSubmit && unanswered.length > 0) {
             setAttemptError(`Please answer all questions before submitting. ${unanswered.length} question(s) remain unanswered.`);
             return;
         }
 
         setSubmittingAttempt(true);
         setAttemptError("");
+        setAutoSubmitFailed(false);
 
+        // Finish any already queued answer-save requests before submitting. The
+        // server still uses its own deadline and saved answer map after expiry.
         try {
+            await answerSaveQueueRef.current.catch(() => undefined);
+
+            const answersToSubmit = isAutoSubmit
+                ? Object.fromEntries(
+                    activeQuestions.map((question) => [
+                        question.id,
+                        currentAnswers[question.id] || "",
+                    ])
+                )
+                : currentAnswers;
+
             const response = await studentApi.post(
                 `/student/quizzes/${activeQuiz.id}/submit`,
-                { answers: selectedAnswers }
+                {
+                    attempt_session_id: serverAttemptSessionId,
+                    timed_out: isAutoSubmit,
+                    answers: answersToSubmit,
+                }
             );
 
             setAttemptReceipt(response.data?.attempt || null);
             setAttemptResult(response.data?.result || null);
             setAttemptMessage(
-                response.data?.message || "Your answers were submitted successfully."
+                isAutoSubmit
+                    ? "Time is up. Your saved answers were automatically submitted and graded."
+                    : (response.data?.message || "Your answers were submitted successfully.")
             );
             setAttemptSubmitted(true);
+            setServerAttemptSessionId(null);
+            setTimerDeadline(null);
+            setRemainingSeconds(null);
+            setAnswerSaveError("");
+            clearQuizSession(activeQuiz.id);
             await loadStudentResults();
         } catch (err) {
-            setAttemptError(
+            const message =
                 err.response?.data?.message ||
-                "Unable to submit your answers. Please try again."
+                err.message ||
+                "Unable to submit your answers. Please try again.";
+
+            setAttemptError(
+                isAutoSubmit
+                    ? `${message} Time has expired. Please retry the automatic submission.`
+                    : message
             );
+            if (isAutoSubmit) {
+                setAutoSubmitFailed(true);
+            }
         } finally {
             setSubmittingAttempt(false);
         }
     };
 
+    const handleAnswerChange = (questionId, optionKey) => {
+        if (!activeQuiz || !serverAttemptSessionId || submittingAttempt || remainingSeconds === 0) return;
+
+        const nextAnswers = {
+            ...(selectedAnswersRef.current || {}),
+            [questionId]: optionKey,
+        };
+        selectedAnswersRef.current = nextAnswers;
+        setSelectedAnswers(nextAnswers);
+        setAnswerSaveError("");
+        setSessionValue(
+            getQuizSessionKey(activeQuiz.id, "answers"),
+            JSON.stringify(nextAnswers)
+        );
+
+        const quizId = activeQuiz.id;
+        const attemptSessionId = serverAttemptSessionId;
+        answerSaveQueueRef.current = answerSaveQueueRef.current
+            .catch(() => undefined)
+            .then(() => studentApi.put(`/student/quizzes/${quizId}/attempt/answer`, {
+                attempt_session_id: attemptSessionId,
+                question_id: questionId,
+                selected_option: optionKey,
+            }))
+            .then(() => setAnswerSaveError(""))
+            .catch((err) => {
+                setAnswerSaveError(
+                    err.response?.data?.message ||
+                    "An answer could not be saved to the server. Check your connection before time expires."
+                );
+            });
+    };
+
+    // Keep the latest submit function available to the timer interval.
+    submitQuizRef.current = submitQuiz;
+
+    const handleSubmitQuiz = async (event) => {
+        event.preventDefault();
+        await submitQuizRef.current?.(false);
+    };
+
+    useEffect(() => {
+        if (!activeQuiz || !timerDeadline || attemptSubmitted) return undefined;
+
+        const updateCountdown = () => {
+            const secondsLeft = Math.max(
+                0,
+                Math.ceil((timerDeadline - Date.now()) / 1000)
+            );
+
+            setRemainingSeconds(secondsLeft);
+
+            if (
+                secondsLeft === 0 &&
+                !submittingAttempt &&
+                !autoSubmitTriggeredRef.current
+            ) {
+                autoSubmitTriggeredRef.current = true;
+                setAttemptMessage("Time is up. Submitting your answers...");
+                void submitQuizRef.current?.(true);
+            }
+        };
+
+        updateCountdown();
+        const intervalId = window.setInterval(updateCountdown, 1000);
+
+        return () => window.clearInterval(intervalId);
+    }, [activeQuiz?.id, timerDeadline, attemptSubmitted, submittingAttempt]);
+
     const handleReturnToQuizList = () => {
         setActiveNavItem("dashboard");
         setActiveQuiz(null);
         setActiveQuestions([]);
+        selectedAnswersRef.current = {};
         setSelectedAnswers({});
+        setServerAttemptSessionId(null);
+        setAnswerSaveError("");
         setAttemptError("");
         setAttemptMessage("");
         setAttemptReceipt(null);
         setAttemptResult(null);
         setAttemptSubmitted(false);
+        setTimerDeadline(null);
+        setRemainingSeconds(null);
+        setAutoSubmitFailed(false);
+        autoSubmitTriggeredRef.current = false;
         loadStudentQuizzes();
         loadStudentResults();
     };
@@ -215,6 +415,16 @@ function StudentApp() {
             hour: "numeric",
             minute: "2-digit",
         });
+    };
+
+    const formatCountdown = (seconds) => {
+        if (seconds === null || seconds === undefined) return "--:--";
+
+        const safeSeconds = Math.max(0, Number(seconds) || 0);
+        const minutes = Math.floor(safeSeconds / 60);
+        const remaining = safeSeconds % 60;
+
+        return `${String(minutes).padStart(2, "0")}:${String(remaining).padStart(2, "0")}`;
     };
 
     useEffect(() => {
@@ -294,10 +504,17 @@ function StudentApp() {
             setResultsError("");
             setActiveQuiz(null);
             setActiveQuestions([]);
+            selectedAnswersRef.current = {};
             setSelectedAnswers({});
+            setServerAttemptSessionId(null);
+            setAnswerSaveError("");
             setAttemptSubmitted(false);
             setAttemptReceipt(null);
             setAttemptError("");
+            setTimerDeadline(null);
+            setRemainingSeconds(null);
+            setAutoSubmitFailed(false);
+            autoSubmitTriggeredRef.current = false;
             setError(
                 err.response?.data?.message ||
                 "Unable to sign in. Check your student account details and try again."
@@ -316,6 +533,17 @@ function StudentApp() {
         } finally {
             localStorage.removeItem("student_token");
             localStorage.removeItem("student_info");
+            try {
+                const quizSessionPrefix = `quizspace:student:${student?.id ?? "current"}:quiz:`;
+                for (let index = window.sessionStorage.length - 1; index >= 0; index -= 1) {
+                    const key = window.sessionStorage.key(index);
+                    if (key?.startsWith(quizSessionPrefix)) {
+                        window.sessionStorage.removeItem(key);
+                    }
+                }
+            } catch {
+                // Session cleanup must not prevent sign-out.
+            }
             window.history.replaceState({}, "", "/student");
             setActiveNavItem("dashboard");
             setStudent(null);
@@ -327,10 +555,17 @@ function StudentApp() {
             setResultsError("");
             setActiveQuiz(null);
             setActiveQuestions([]);
+            selectedAnswersRef.current = {};
             setSelectedAnswers({});
+            setServerAttemptSessionId(null);
+            setAnswerSaveError("");
             setAttemptSubmitted(false);
             setAttemptReceipt(null);
             setAttemptError("");
+            setTimerDeadline(null);
+            setRemainingSeconds(null);
+            setAutoSubmitFailed(false);
+            autoSubmitTriggeredRef.current = false;
             setEmail("");
             setPassword("");
             setError("");
@@ -558,6 +793,34 @@ function StudentApp() {
                                     </div>
                                 )}
 
+                                {!attemptSubmitted && answerSaveError && (
+                                    <div className="student-quiz-error" role="alert">
+                                        {answerSaveError}
+                                    </div>
+                                )}
+
+                                {remainingSeconds === 0 && !attemptSubmitted && (
+                                    <div className={`student-quiz-time-expired ${autoSubmitFailed ? "failed" : ""}`} role="status">
+                                        <strong>
+                                            {autoSubmitFailed
+                                                ? "Time is up — automatic submission needs to be retried."
+                                                : submittingAttempt
+                                                    ? "Time is up. Submitting your answers..."
+                                                    : "Time is up."}
+                                        </strong>
+                                        {autoSubmitFailed && (
+                                            <button
+                                                type="button"
+                                                className="student-quiz-retry-submit"
+                                                onClick={() => submitQuizRef.current?.(true)}
+                                                disabled={submittingAttempt}
+                                            >
+                                                {submittingAttempt ? "Retrying..." : "Retry automatic submission"}
+                                            </button>
+                                        )}
+                                    </div>
+                                )}
+
                                 {attemptSubmitted ? (
                                     <div className="student-quiz-submission-success" role="status">
                                         <div className="student-quiz-success-icon">✓</div>
@@ -616,9 +879,20 @@ function StudentApp() {
                                                 <strong>{activeQuestions.length} question{activeQuestions.length === 1 ? "" : "s"}</strong>
                                                 <span>Select one answer for every question, then submit.</span>
                                             </div>
-                                            <div className="student-quiz-duration-pill">
-                                                <span>Duration</span>
-                                                <strong>{activeQuiz.duration_minutes ?? "—"} min</strong>
+                                            <div className="student-quiz-timer-group">
+                                                <div className="student-quiz-duration-pill">
+                                                    <span>Duration</span>
+                                                    <strong>{activeQuiz.duration_minutes ?? "—"} min</strong>
+                                                </div>
+                                                <div
+                                                    className={`student-quiz-countdown ${remainingSeconds !== null && remainingSeconds <= 60 ? "urgent" : ""} ${remainingSeconds === 0 ? "expired" : ""}`}
+                                                    role="timer"
+                                                    aria-live="polite"
+                                                    aria-label="Time remaining"
+                                                >
+                                                    <span>Time remaining</span>
+                                                    <strong>{formatCountdown(remainingSeconds)}</strong>
+                                                </div>
                                             </div>
                                         </div>
 
@@ -642,11 +916,8 @@ function StudentApp() {
                                                                     name={`question-${question.id}`}
                                                                     value={optionKey}
                                                                     checked={selectedAnswers[question.id] === optionKey}
-                                                                    onChange={() => setSelectedAnswers((current) => ({
-                                                                        ...current,
-                                                                        [question.id]: optionKey,
-                                                                    }))}
-                                                                    disabled={submittingAttempt}
+                                                                    onChange={() => handleAnswerChange(question.id, optionKey)}
+                                                                    disabled={submittingAttempt || (remainingSeconds !== null && remainingSeconds <= 0)}
                                                                 />
                                                                 <span className="student-question-option-key">{optionKey}</span>
                                                                 <span className="student-question-option-text">{optionText}</span>
@@ -661,7 +932,7 @@ function StudentApp() {
                                             <button
                                                 type="submit"
                                                 className="student-quiz-submit-button"
-                                                disabled={submittingAttempt}
+                                                disabled={submittingAttempt || (remainingSeconds !== null && remainingSeconds <= 0)}
                                             >
                                                 {submittingAttempt ? "Submitting..." : "Submit Answers"}
                                             </button>

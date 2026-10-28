@@ -402,3 +402,102 @@ button.student-nav-item:focus-visible {
         font-size: 24px;
     }
 }
+
+
+/* Quiz countdown timer and automatic submission */
+.student-quiz-timer-group {
+    display: flex;
+    align-items: stretch;
+    gap: 10px;
+    flex: 0 0 auto;
+}
+.student-quiz-countdown {
+    display: grid;
+    gap: 4px;
+    min-width: 126px;
+    padding: 9px 13px;
+    border: 1px solid #cfd6ff;
+    border-radius: 10px;
+    color: #3e4bb6;
+    background: #f0f2ff;
+    font-variant-numeric: tabular-nums;
+}
+.student-quiz-countdown span {
+    color: #6f79bf !important;
+    font-size: 10px !important;
+}
+.student-quiz-countdown strong {
+    color: #3846b5 !important;
+    font-size: 17px !important;
+    line-height: 1.2;
+    letter-spacing: .5px;
+}
+.student-quiz-countdown.urgent {
+    border-color: #f2c66d;
+    color: #985b05;
+    background: #fff7e7;
+    animation: student-timer-pulse 1.2s ease-in-out infinite;
+}
+.student-quiz-countdown.urgent span,
+.student-quiz-countdown.urgent strong {
+    color: #985b05 !important;
+}
+.student-quiz-countdown.expired {
+    border-color: #f1b8bd;
+    color: #a32632;
+    background: #fff0f1;
+    animation: none;
+}
+.student-quiz-countdown.expired span,
+.student-quiz-countdown.expired strong {
+    color: #a32632 !important;
+}
+.student-quiz-time-expired {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 14px;
+    padding: 14px 16px;
+    border: 1px solid #f2d89b;
+    border-radius: 12px;
+    color: #80520c;
+    background: #fff8e8;
+    font-size: 12px;
+    line-height: 1.5;
+}
+.student-quiz-time-expired.failed {
+    border-color: #efc0c4;
+    color: #9f2732;
+    background: #fff3f3;
+}
+.student-quiz-retry-submit {
+    padding: 9px 12px;
+    border: 0;
+    border-radius: 9px;
+    color: #fff;
+    background: #5b66e9;
+    font: inherit;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+.student-quiz-retry-submit:disabled {
+    opacity: .65;
+    cursor: wait;
+}
+@keyframes student-timer-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(242, 198, 109, 0); }
+    50% { box-shadow: 0 0 0 4px rgba(242, 198, 109, .18); }
+}
+@media (max-width: 760px) {
+    .student-quiz-timer-group {
+        width: 100%;
+        flex-wrap: wrap;
+    }
+    .student-quiz-countdown,
+    .student-quiz-duration-pill {
+        flex: 1 1 120px;
+    }
+}

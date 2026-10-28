@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Http\Request;
@@ -65,6 +64,18 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get(
         '/student/quizzes/{quizId}',
         [StudentQuizController::class, 'show']
+    );
+
+    // Start or resume a server-timed student quiz attempt
+    Route::post(
+        '/student/quizzes/{quizId}/start',
+        [QuizAttemptController::class, 'start']
+    );
+
+    // Persist each selected option on the server before the deadline
+    Route::put(
+        '/student/quizzes/{quizId}/attempt/answer',
+        [QuizAttemptController::class, 'saveAnswer']
     );
 
     // Submit quiz answers and calculate marks
