@@ -1,0 +1,1 @@
+Optional Laravel backend patch. If you want the Teacher Results screen to show marks and percentages, back up and replace the project's `app/Http/Controllers/TeacherResultsController.php` with the provided version, then run `php -l app/Http/Controllers/TeacherResultsController.php` and `php artisan optimize:clear`.

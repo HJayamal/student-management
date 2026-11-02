@@ -1,0 +1,35 @@
+{
+  "expo": {
+    "name": "QuizSpace",
+    "slug": "quizspace-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "quizspace",
+    "android": {
+      "package": "com.hjayamal.quizspace",
+      "versionCode": 1
+    },
+      "plugins": [
+          [
+              "expo-secure-store",
+              {
+                  "configureAndroidBackup": true
+              }
+          ],
+          [
+              "expo-build-properties",
+              {
+                  "android": {
+                      "usesCleartextTraffic": true
+                  }
+              }
+          ]
+      ],
+    "extra": {
+      "eas": {
+        "projectId": "565cb48e-1181-4bf9-a240-210853e6f062"
+      }
+    }
+  }
+}
