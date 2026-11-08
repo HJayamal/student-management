@@ -1,3 +1,4 @@
+
 <?php
 
 use Illuminate\Http\Request;
@@ -11,6 +12,8 @@ use App\Http\Controllers\StudentDashboardController;
 use App\Http\Controllers\StudentQuizController;
 use App\Http\Controllers\StudentResultsController;
 use App\Http\Controllers\QuizAttemptController;
+use App\Http\Controllers\StudentPushTokenController;
+use App\Http\Controllers\StudentNotificationController;
 use App\Http\Controllers\TeacherAuthController;
 use App\Http\Controllers\TeacherDashboardController;
 use App\Http\Controllers\TeacherQuizController;
@@ -88,6 +91,45 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get(
         '/student/results',
         [StudentResultsController::class, 'index']
+    );
+
+    // ---------------- Student Push Token APIs ----------------
+    // Retained from the previous setup; not required for in-app notifications.
+
+    Route::post(
+        '/student/push-token',
+        [StudentPushTokenController::class, 'store']
+    );
+
+    Route::delete(
+        '/student/push-token',
+        [StudentPushTokenController::class, 'destroy']
+    );
+
+    // ---------------- In-App Student Notification APIs ----------------
+
+    // Get student notifications
+    Route::get(
+        '/student/notifications',
+        [StudentNotificationController::class, 'index']
+    );
+
+    // Get unread notification count
+    Route::get(
+        '/student/notifications/unread-count',
+        [StudentNotificationController::class, 'unreadCount']
+    );
+
+    // Mark one notification as read
+    Route::patch(
+        '/student/notifications/{id}/read',
+        [StudentNotificationController::class, 'markRead']
+    );
+
+    // Mark all notifications as read
+    Route::patch(
+        '/student/notifications/read-all',
+        [StudentNotificationController::class, 'markAllRead']
     );
 
     // Student Logout
@@ -308,4 +350,5 @@ Route::middleware('auth:sanctum')->group(function () {
         '/teacher/quizzes/{id}/publish',
         [TeacherQuizController::class, 'publish']
     );
+
 });

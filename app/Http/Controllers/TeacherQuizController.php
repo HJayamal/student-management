@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Quiz;
+use App\Models\StudentNotification;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\DB;
@@ -70,6 +71,7 @@ class TeacherQuizController extends Controller
         )->format('Y-m-d H:i:s');
 
         $quiz = DB::transaction(function () use ($validated, $request) {
+
             $quiz = Quiz::create([
                 'teacher_id' => $request->user()->id,
                 'title' => $validated['title'],
@@ -101,6 +103,9 @@ class TeacherQuizController extends Controller
             return $quiz;
         });
 
+        // Automatically notify matching students after quiz creation.
+        $notificationsCreated = $this->notifyMatchingStudents($quiz);
+
         return response()->json([
             'message' => 'Quiz scheduled successfully.',
             'quiz' => [
@@ -116,6 +121,7 @@ class TeacherQuizController extends Controller
                 'published_at' => $quiz->published_at,
                 'questions_count' => count($validated['questions']),
             ],
+            'notifications_created' => $notificationsCreated,
         ], 201);
     }
 
@@ -140,7 +146,7 @@ class TeacherQuizController extends Controller
 
         if (
             $quiz->status !== 'draft'
-            && ! $this->isFutureScheduledQuiz($quiz)
+            && !$this->isFutureScheduledQuiz($quiz)
         ) {
             return response()->json([
                 'message' => 'Only draft or not-yet-available scheduled quizzes can be edited.',
@@ -176,6 +182,7 @@ class TeacherQuizController extends Controller
         )->format('Y-m-d H:i:s');
 
         DB::transaction(function () use ($quiz, $validated) {
+
             $quiz->update([
                 'title' => $validated['title'],
                 'grade' => $validated['grade'],
@@ -216,7 +223,7 @@ class TeacherQuizController extends Controller
 
         if (
             $quiz->status !== 'draft'
-            && ! $this->isFutureScheduledQuiz($quiz)
+            && !$this->isFutureScheduledQuiz($quiz)
         ) {
             return response()->json([
                 'message' => 'Only draft or not-yet-available scheduled quizzes can be deleted.',
@@ -241,7 +248,7 @@ class TeacherQuizController extends Controller
             ], 422);
         }
 
-        if (! $quiz->questions()->exists()) {
+        if (!$quiz->questions()->exists()) {
             return response()->json([
                 'message' => 'Add at least one question before publishing.',
             ], 422);
@@ -251,6 +258,9 @@ class TeacherQuizController extends Controller
         $quiz->available_at = $quiz->available_at ?? now();
         $quiz->published_at = now();
         $quiz->save();
+
+        // Automatically notify matching students after publishing.
+        $notificationsCreated = $this->notifyMatchingStudents($quiz);
 
         return response()->json([
             'message' => 'Quiz published successfully.',
@@ -265,7 +275,71 @@ class TeacherQuizController extends Controller
                 'status' => $quiz->status,
                 'published_at' => $quiz->published_at,
             ],
+            'notifications_created' => $notificationsCreated,
         ]);
+    }
+
+    /**
+     * Create in-app notifications for active students
+     * matching the quiz's course, degree and batch.
+     */
+    private function notifyMatchingStudents(Quiz $quiz): int
+    {
+        $course = strtolower(trim((string) $quiz->course));
+        $degree = strtolower(trim((string) $quiz->degree));
+        $batch = strtolower(trim((string) $quiz->batch));
+
+        if ($course === '' || $degree === '' || $batch === '') {
+            return 0;
+        }
+
+        // Find active students belonging to the quiz's academic group.
+        $studentIds = DB::table('admissions')
+            ->join(
+                'students',
+                'students.reg_no',
+                '=',
+                'admissions.reg_no'
+            )
+            ->whereRaw('LOWER(TRIM(admissions.status)) = ?', ['active'])
+            ->whereRaw('LOWER(TRIM(admissions.course)) = ?', [$course])
+            ->whereRaw('LOWER(TRIM(admissions.degree)) = ?', [$degree])
+            ->whereRaw('LOWER(TRIM(admissions.batch)) = ?', [$batch])
+            ->distinct()
+            ->pluck('students.id');
+
+        $createdCount = 0;
+
+        $availableAt = $quiz->available_at
+            ? Carbon::parse($quiz->available_at)->format('Y-m-d h:i A')
+            : 'now';
+
+        $message = 'A new quiz "' . $quiz->title
+            . '" for ' . $quiz->subject
+            . ' has been published. Available from '
+            . $availableAt . '.';
+
+        foreach ($studentIds as $studentId) {
+
+            $notification = StudentNotification::firstOrCreate(
+                [
+                    'student_id' => $studentId,
+                    'quiz_id' => $quiz->id,
+                    'type' => 'quiz',
+                ],
+                [
+                    'title' => 'New Quiz Published',
+                    'message' => $message,
+                    'read_at' => null,
+                ]
+            );
+
+            if ($notification->wasRecentlyCreated) {
+                $createdCount++;
+            }
+        }
+
+        return $createdCount;
     }
 
     private function isFutureScheduledQuiz(Quiz $quiz): bool
