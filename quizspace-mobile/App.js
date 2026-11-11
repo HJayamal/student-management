@@ -3,6 +3,7 @@ import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Modal,
     Platform,
     Pressable,
     ScrollView,
@@ -14,7 +15,7 @@ import {
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 import { createApi, getApiError, normalizeApiBaseUrl } from './src/api';
-import { formatDate, formatDuration, makeLocalDateTime } from './src/format';
+import { formatDate, formatDuration } from './src/format';
 import StudentNotificationsScreen from './src/StudentNotificationsScreen';
 
 const COLORS = {
@@ -51,6 +52,12 @@ const EMPTY_QUESTION = () => ({
     marks: '1',
 });
 
+function makeFutureLocalDateTime() {
+    const date = new Date(Date.now() + 15 * 60 * 1000);
+    const pad = (value) => String(value).padStart(2, '0');
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
 function messageFrom(error) {
     const data = error?.response?.data;
     if (data?.errors) {
@@ -78,6 +85,85 @@ function Field({ label, value, onChangeText, placeholder, secureTextEntry, keybo
                 style={[styles.input, multiline && styles.multilineInput, !editable && styles.inputDisabled]}
             />
             {!!helperText && <Text style={styles.helperText}>{helperText}</Text>}
+        </View>
+    );
+}
+
+function DropdownField({
+                           label,
+                           value,
+                           placeholder,
+                           options = [],
+                           onSelect,
+                           disabled = false,
+                           helperText,
+                           emptyMessage = 'No options available.',
+                       }) {
+    const [visible, setVisible] = useState(false);
+
+    return (
+        <View style={styles.fieldWrap}>
+            {!!label && <Text style={styles.fieldLabel}>{label}</Text>}
+            <Pressable
+                accessibilityRole="button"
+                accessibilityState={{ disabled }}
+                disabled={disabled}
+                onPress={() => setVisible(true)}
+                style={[styles.dropdownInput, disabled && styles.inputDisabled]}
+            >
+                <Text style={[styles.dropdownValue, !value && styles.dropdownPlaceholder]} numberOfLines={2}>
+                    {value || placeholder}
+                </Text>
+                <Text style={styles.dropdownChevron}>⌄</Text>
+            </Pressable>
+            {!!helperText && <Text style={styles.helperText}>{helperText}</Text>}
+
+            <Modal
+                visible={visible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setVisible(false)}
+            >
+                <View style={styles.dropdownModalOverlay}>
+                    <View style={styles.dropdownModalCard}>
+                        <View style={styles.dropdownModalHeader}>
+                            <Text style={styles.dropdownModalTitle}>Select {label?.replace(' *', '') || 'an option'}</Text>
+                            <Pressable onPress={() => setVisible(false)} hitSlop={10}>
+                                <Text style={styles.dropdownModalCloseIcon}>×</Text>
+                            </Pressable>
+                        </View>
+                        {options.length > 0 ? (
+                            <ScrollView style={styles.dropdownOptionsScroll} keyboardShouldPersistTaps="handled">
+                                {options.map((option) => (
+                                    <Pressable
+                                        key={option}
+                                        onPress={() => {
+                                            onSelect(option);
+                                            setVisible(false);
+                                        }}
+                                        style={({ pressed }) => [
+                                            styles.dropdownOption,
+                                            value === option && styles.dropdownOptionSelected,
+                                            pressed && styles.pressed,
+                                        ]}
+                                    >
+                                        <Text style={[
+                                            styles.dropdownOptionText,
+                                            value === option && styles.dropdownOptionTextSelected,
+                                        ]}>
+                                            {option}
+                                        </Text>
+                                        {value === option && <Text style={styles.dropdownOptionCheck}>✓</Text>}
+                                    </Pressable>
+                                ))}
+                            </ScrollView>
+                        ) : (
+                            <Text style={styles.dropdownEmptyText}>{emptyMessage}</Text>
+                        )}
+                        <PrimaryButton title="Close" onPress={() => setVisible(false)} variant="secondary" />
+                    </View>
+                </View>
+            </Modal>
         </View>
     );
 }
@@ -231,6 +317,12 @@ export default function App() {
     const [quizzes, setQuizzes] = useState([]);
     const [results, setResults] = useState([]);
     const [unreadCount, setUnreadCount] = useState(0);
+    const [academicOptions, setAcademicOptions] = useState([]);
+    const [academicOptionsLoading, setAcademicOptionsLoading] = useState(false);
+    const [academicOptionsError, setAcademicOptionsError] = useState('');
+    const [subjects, setSubjects] = useState([]);
+    const [subjectsLoading, setSubjectsLoading] = useState(false);
+    const [subjectsError, setSubjectsError] = useState('');
     const [startingQuizId, setStartingQuizId] = useState(null);
 
     const [activeQuiz, setActiveQuiz] = useState(null);
@@ -250,8 +342,8 @@ export default function App() {
     const submittingRef = useRef(false);
 
     const [quizForm, setQuizForm] = useState(() => ({
-        title: '', grade: '13', course: '', degree: '', batch: '', subject: '',
-        description: '', duration_minutes: '20', available_at: makeLocalDateTime(),
+        title: '', course: '', degree: '', batch: '', subject: '',
+        description: '', duration_minutes: '15', available_at: makeFutureLocalDateTime(),
         questions: [EMPTY_QUESTION()],
     }));
     const [creatingQuiz, setCreatingQuiz] = useState(false);
@@ -260,6 +352,38 @@ export default function App() {
         if (!apiBase) return null;
         try { return createApi(apiBase, token); } catch { return null; }
     }, [apiBase, token]);
+
+    const courseOptions = useMemo(() => (
+        [...new Set(academicOptions.map((option) => option.course).filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b))
+    ), [academicOptions]);
+
+    const degreeOptions = useMemo(() => (
+        [...new Set(academicOptions
+            .filter((option) => option.course === quizForm.course)
+            .map((option) => option.degree)
+            .filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b))
+    ), [academicOptions, quizForm.course]);
+
+    const batchOptions = useMemo(() => (
+        [...new Set(academicOptions
+            .filter((option) => option.course === quizForm.course && option.degree === quizForm.degree)
+            .map((option) => option.batch)
+            .filter(Boolean))]
+            .sort((a, b) => a.localeCompare(b))
+    ), [academicOptions, quizForm.course, quizForm.degree]);
+
+    const subjectOptions = useMemo(() => (
+        subjects
+            .filter((subject) =>
+                String(subject.course_name || '').trim() === quizForm.course.trim() &&
+                String(subject.degree_name || '').trim() === quizForm.degree.trim()
+            )
+            .map((subject) => String(subject.subject_name || '').trim())
+            .filter(Boolean)
+            .sort((a, b) => a.localeCompare(b))
+    ), [subjects, quizForm.course, quizForm.degree]);
 
     useEffect(() => {
         let alive = true;
@@ -345,6 +469,61 @@ export default function App() {
         if (booting || !token || !role || !apiBase) return;
         void refreshData(true);
     }, [booting, token, role, apiBase, refreshData]);
+
+    // Load the same academic and subject options used by the web Teacher portal.
+    useEffect(() => {
+        if (!api || role !== 'teacher' || !token) {
+            setAcademicOptions([]);
+            setSubjects([]);
+            setAcademicOptionsError('');
+            setSubjectsError('');
+            setAcademicOptionsLoading(false);
+            setSubjectsLoading(false);
+            return undefined;
+        }
+
+        let active = true;
+        setAcademicOptionsLoading(true);
+        setSubjectsLoading(true);
+        setAcademicOptionsError('');
+        setSubjectsError('');
+
+        async function loadQuizOptions() {
+            const [academicResult, subjectResult] = await Promise.allSettled([
+                api.get('/teacher/academic-options'),
+                api.get('/teacher/subjects'),
+            ]);
+
+            if (!active) return;
+
+            if (academicResult.status === 'fulfilled') {
+                const options = academicResult.value.data?.academic_options;
+                setAcademicOptions(Array.isArray(options) ? options : []);
+                setAcademicOptionsError('');
+            } else {
+                setAcademicOptions([]);
+                setAcademicOptionsError(messageFrom(academicResult.reason));
+            }
+
+            if (subjectResult.status === 'fulfilled') {
+                const loadedSubjects = subjectResult.value.data;
+                setSubjects(Array.isArray(loadedSubjects) ? loadedSubjects : []);
+                setSubjectsError('');
+            } else {
+                setSubjects([]);
+                setSubjectsError(messageFrom(subjectResult.reason));
+            }
+
+            setAcademicOptionsLoading(false);
+            setSubjectsLoading(false);
+        }
+
+        void loadQuizOptions();
+
+        return () => {
+            active = false;
+        };
+    }, [api, role, token]);
 
     // In-app notifications are loaded from Laravel when the student opens Alerts.
 
@@ -551,7 +730,19 @@ export default function App() {
         );
     };
 
-    const updateQuizForm = (key, value) => setQuizForm((form) => ({ ...form, [key]: value }));
+    const updateQuizForm = (key, value) => setQuizForm((form) => {
+        const next = { ...form, [key]: value };
+        if (key === 'course') {
+            next.degree = '';
+            next.batch = '';
+            next.subject = '';
+        } else if (key === 'degree') {
+            next.batch = '';
+            next.subject = '';
+        }
+        return next;
+    });
+
     const updateQuestion = (index, key, value) => setQuizForm((form) => ({
         ...form,
         questions: form.questions.map((question, currentIndex) => currentIndex === index ? { ...question, [key]: value } : question),
@@ -561,6 +752,7 @@ export default function App() {
         if (!api) return;
         setError('');
         setNotice('');
+
         const normalizedQuestions = quizForm.questions.map((question) => ({
             question_text: question.question_text.trim(),
             option_a: question.option_a.trim(),
@@ -570,31 +762,86 @@ export default function App() {
             correct_option: question.correct_option,
             marks: Number(question.marks || 1),
         }));
-        if (!quizForm.title.trim() || !quizForm.course.trim() || !quizForm.degree.trim() || !quizForm.batch.trim() || !quizForm.subject.trim()) {
-            setError('Fill in the quiz title, course, degree, batch, and subject.');
+
+        if (!quizForm.title.trim() || !quizForm.course || !quizForm.degree || !quizForm.batch || !quizForm.subject) {
+            setError('Complete the quiz title, course, degree, batch, and subject.');
             return;
         }
-        if (normalizedQuestions.some((question) => !question.question_text || !question.option_a || !question.option_b || !question.option_c || !question.option_d || !Number.isInteger(question.marks) || question.marks < 1)) {
-            setError('Each question needs text, all four options, and marks of at least 1.');
+
+        const validAcademicGroup = academicOptions.some((option) =>
+            option.course === quizForm.course &&
+            option.degree === quizForm.degree &&
+            option.batch === quizForm.batch
+        );
+        if (!validAcademicGroup) {
+            setError('Please select a Course, Degree and Batch registered in Academic Setup.');
             return;
         }
+
+        const validSubject = subjects.some((subject) =>
+            String(subject.subject_name || '').trim() === quizForm.subject.trim() &&
+            String(subject.course_name || '').trim() === quizForm.course.trim() &&
+            String(subject.degree_name || '').trim() === quizForm.degree.trim()
+        );
+        if (!validSubject) {
+            setError('Please select a subject assigned to the selected Course and Degree in the Admin Dashboard.');
+            return;
+        }
+
+        const duration = Number(quizForm.duration_minutes);
+        if (!Number.isInteger(duration) || duration < 1 || duration > 300) {
+            setError('Duration must be a whole number between 1 and 300 minutes.');
+            return;
+        }
+
+        const availableAt = new Date(quizForm.available_at);
+        if (!quizForm.available_at || Number.isNaN(availableAt.getTime())) {
+            setError('Please enter a valid Available Date & Time in YYYY-MM-DDTHH:mm format.');
+            return;
+        }
+        if (availableAt.getTime() <= Date.now()) {
+            setError('Available Date & Time must be later than the current time.');
+            return;
+        }
+
+        if (normalizedQuestions.some((question) =>
+            !question.question_text ||
+            !question.option_a ||
+            !question.option_b ||
+            !question.option_c ||
+            !question.option_d ||
+            !Number.isInteger(question.marks) ||
+            question.marks < 1 ||
+            question.marks > 100
+        )) {
+            setError('Each question needs text, all four options, and marks between 1 and 100.');
+            return;
+        }
+
         setCreatingQuiz(true);
         try {
             const response = await api.post('/teacher/quizzes', {
                 title: quizForm.title.trim(),
-                grade: Number(quizForm.grade || 13),
-                course: quizForm.course.trim(),
-                degree: quizForm.degree.trim(),
-                batch: quizForm.batch.trim(),
-                subject: quizForm.subject.trim(),
+                // The web Teacher portal still sends this required legacy backend field.
+                grade: 1,
+                course: quizForm.course,
+                degree: quizForm.degree,
+                batch: quizForm.batch,
+                subject: quizForm.subject,
                 description: quizForm.description.trim() || null,
-                duration_minutes: Number(quizForm.duration_minutes),
-                available_at: quizForm.available_at.trim(),
+                duration_minutes: duration,
+                // Match the web portal: convert the selected local datetime to UTC.
+                available_at: availableAt.toISOString(),
                 questions: normalizedQuestions,
             });
+
             if (response.data?.quiz) setQuizzes((current) => [response.data.quiz, ...current]);
-            setQuizForm({ title: '', grade: '13', course: '', degree: '', batch: '', subject: '', description: '', duration_minutes: '20', available_at: makeLocalDateTime(), questions: [EMPTY_QUESTION()] });
-            setNotice(response.data?.message || 'Quiz created successfully.');
+            setQuizForm({
+                title: '', course: '', degree: '', batch: '', subject: '',
+                description: '', duration_minutes: '15', available_at: makeFutureLocalDateTime(),
+                questions: [EMPTY_QUESTION()],
+            });
+            setNotice(response.data?.message || 'Quiz scheduled successfully.');
             setScreen('quizzes');
         } catch (createError) {
             setError(messageFrom(createError));
@@ -695,6 +942,7 @@ export default function App() {
                     </View>
                     <PrimaryButton title="Create a quiz  +" onPress={() => goTo('create')} />
                     <PrimaryButton title="Review student results  →" onPress={() => goTo('results')} variant="secondary" />
+                    <PrimaryButton title="Sign out" onPress={handleLogout} variant="danger" />
                 </>
             )}
         </>
@@ -738,38 +986,139 @@ export default function App() {
 
     const renderCreateQuiz = () => (
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-            <SectionTitle title="Create a quiz" subtitle="This sends the quiz to your existing Laravel API." />
+            <SectionTitle title="Create a quiz" subtitle="Complete the quiz details and add your questions." />
+
             <View style={styles.card}>
-                <Field label="Quiz title" value={quizForm.title} onChangeText={(value) => updateQuizForm('title', value)} placeholder="e.g. Computer Networks Test" autoCapitalize="sentences" />
-                <View style={styles.twoFields}>
-                    <View style={styles.halfField}><Field label="Grade (1–13)" value={quizForm.grade} onChangeText={(value) => updateQuizForm('grade', value)} keyboardType="number-pad" /></View>
-                    <View style={styles.halfField}><Field label="Duration (minutes)" value={quizForm.duration_minutes} onChangeText={(value) => updateQuizForm('duration_minutes', value)} keyboardType="number-pad" /></View>
-                </View>
-                <Field label="Course" value={quizForm.course} onChangeText={(value) => updateQuizForm('course', value)} placeholder="Course name" autoCapitalize="words" />
-                <Field label="Degree" value={quizForm.degree} onChangeText={(value) => updateQuizForm('degree', value)} placeholder="Degree name" autoCapitalize="words" />
-                <Field label="Batch" value={quizForm.batch} onChangeText={(value) => updateQuizForm('batch', value)} placeholder="e.g. 2026" autoCapitalize="words" />
-                <Field label="Subject" value={quizForm.subject} onChangeText={(value) => updateQuizForm('subject', value)} placeholder="Subject name" autoCapitalize="words" />
-                <Field label="Description (optional)" value={quizForm.description} onChangeText={(value) => updateQuizForm('description', value)} placeholder="About this quiz" multiline autoCapitalize="sentences" />
-                <Field label="Available at" value={quizForm.available_at} onChangeText={(value) => updateQuizForm('available_at', value)} placeholder="YYYY-MM-DD HH:mm:ss" helperText="Use a local date/time after the current time. Example: 2026-10-29 09:00:00" autoCapitalize="none" />
+                <Text style={styles.formSectionTitle}>Quiz information</Text>
+                <Field label="Quiz title *" value={quizForm.title} onChangeText={(value) => updateQuizForm('title', value)} placeholder="e.g. Software Engineering Fundamentals Quiz" autoCapitalize="sentences" />
+
+                <DropdownField
+                    label="Course *"
+                    value={quizForm.course}
+                    placeholder={academicOptionsLoading ? 'Loading registered courses...' : courseOptions.length ? 'Select a course' : 'No academic setup found'}
+                    options={courseOptions}
+                    onSelect={(value) => updateQuizForm('course', value)}
+                    disabled={academicOptionsLoading || courseOptions.length === 0}
+                    emptyMessage="No Course / Degree / Batch combinations are registered in Academic Setup."
+                />
+                <DropdownField
+                    label="Degree *"
+                    value={quizForm.degree}
+                    placeholder={!quizForm.course ? 'Select a course first' : degreeOptions.length ? 'Select a degree' : 'No degrees for this course'}
+                    options={degreeOptions}
+                    onSelect={(value) => updateQuizForm('degree', value)}
+                    disabled={!quizForm.course || degreeOptions.length === 0}
+                    emptyMessage="No degrees are configured for this course."
+                />
+                <DropdownField
+                    label="Batch *"
+                    value={quizForm.batch}
+                    placeholder={!quizForm.degree ? 'Select a course and degree first' : batchOptions.length ? 'Select a batch' : 'No batches for this degree'}
+                    options={batchOptions}
+                    onSelect={(value) => updateQuizForm('batch', value)}
+                    disabled={!quizForm.course || !quizForm.degree || batchOptions.length === 0}
+                    emptyMessage="No batches are configured for this Course and Degree."
+                />
+
+                {!!academicOptionsError && <Notice text={academicOptionsError} />}
+
+                <DropdownField
+                    label="Subject *"
+                    value={quizForm.subject}
+                    placeholder={
+                        subjectsLoading ? 'Loading registered subjects...' :
+                            !quizForm.course ? 'Select a course first' :
+                                !quizForm.degree ? 'Select a degree first' :
+                                    subjectsError ? 'Unable to load subjects' :
+                                        subjectOptions.length ? 'Select a subject' : 'No subjects assigned to this course and degree'
+                    }
+                    options={subjectOptions}
+                    onSelect={(value) => updateQuizForm('subject', value)}
+                    disabled={subjectsLoading || !quizForm.course || !quizForm.degree || subjectOptions.length === 0}
+                    helperText="Subjects are filtered by the selected Course and Degree. Register or assign subjects in the Admin Dashboard if the list is empty."
+                    emptyMessage="No subjects are assigned to this Course and Degree."
+                />
+                {!!subjectsError && <Notice text={subjectsError} />}
+
+                <Field
+                    label="Duration (minutes) *"
+                    value={quizForm.duration_minutes}
+                    onChangeText={(value) => updateQuizForm('duration_minutes', value)}
+                    keyboardType="number-pad"
+                    helperText="Enter a duration between 1 and 300 minutes."
+                />
+                <Field
+                    label="Available Date & Time *"
+                    value={quizForm.available_at}
+                    onChangeText={(value) => updateQuizForm('available_at', value)}
+                    placeholder="YYYY-MM-DDTHH:mm"
+                    helperText="Use your local date and time. Students can access this quiz from the selected date and time. The default is 15 minutes from now."
+                    autoCapitalize="none"
+                />
+                <Field
+                    label="Description"
+                    value={quizForm.description}
+                    onChangeText={(value) => updateQuizForm('description', value)}
+                    placeholder="What will students learn from this quiz?"
+                    multiline
+                    autoCapitalize="sentences"
+                />
             </View>
+
+            <SectionTitle
+                title="Quiz questions"
+                subtitle="Add multiple-choice questions and select the correct answer."
+                action={<Text style={styles.questionCountBadge}>{quizForm.questions.length} {quizForm.questions.length === 1 ? 'question' : 'questions'}</Text>}
+            />
+
             {quizForm.questions.map((question, index) => (
                 <View key={`question-${index}`} style={styles.card}>
                     <View style={styles.cardTopRow}>
                         <Text style={styles.cardTitle}>Question {index + 1}</Text>
-                        {quizForm.questions.length > 1 && <Pressable onPress={() => setQuizForm((form) => ({ ...form, questions: form.questions.filter((_, i) => i !== index) }))}><Text style={styles.removeText}>Remove</Text></Pressable>}
+                        {quizForm.questions.length > 1 && (
+                            <Pressable onPress={() => setQuizForm((form) => ({ ...form, questions: form.questions.filter((_, i) => i !== index) }))}>
+                                <Text style={styles.removeText}>Remove</Text>
+                            </Pressable>
+                        )}
                     </View>
-                    <Field label="Question text" value={question.question_text} onChangeText={(value) => updateQuestion(index, 'question_text', value)} placeholder="Write the question" multiline autoCapitalize="sentences" />
-                    {['a', 'b', 'c', 'd'].map((letter) => <Field key={letter} label={`Option ${letter.toUpperCase()}`} value={question[`option_${letter}`]} onChangeText={(value) => updateQuestion(index, `option_${letter}`, value)} placeholder={`Enter option ${letter.toUpperCase()}`} autoCapitalize="sentences" />)}
-                    <Text style={styles.fieldLabel}>Correct answer</Text>
+                    <Field label="Question text *" value={question.question_text} onChangeText={(value) => updateQuestion(index, 'question_text', value)} placeholder="Enter your question" multiline autoCapitalize="sentences" />
+                    {['a', 'b', 'c', 'd'].map((letter) => (
+                        <Field
+                            key={letter}
+                            label={`Option ${letter.toUpperCase()} *`}
+                            value={question[`option_${letter}`]}
+                            onChangeText={(value) => updateQuestion(index, `option_${letter}`, value)}
+                            placeholder={`Enter option ${letter.toUpperCase()}`}
+                            autoCapitalize="sentences"
+                        />
+                    ))}
+                    <Text style={styles.fieldLabel}>Correct answer *</Text>
                     <View style={styles.optionRow}>
-                        {['A', 'B', 'C', 'D'].map((option) => <Pressable key={option} onPress={() => updateQuestion(index, 'correct_option', option)} style={[styles.correctOption, question.correct_option === option && styles.correctOptionSelected]}><Text style={[styles.correctOptionText, question.correct_option === option && styles.correctOptionTextSelected]}>{option}</Text></Pressable>)}
+                        {['A', 'B', 'C', 'D'].map((option) => (
+                            <Pressable
+                                key={option}
+                                onPress={() => updateQuestion(index, 'correct_option', option)}
+                                style={[styles.correctOption, question.correct_option === option && styles.correctOptionSelected]}
+                            >
+                                <Text style={[styles.correctOptionText, question.correct_option === option && styles.correctOptionTextSelected]}>
+                                    Option {option}
+                                </Text>
+                            </Pressable>
+                        ))}
                     </View>
-                    <Field label="Marks" value={question.marks} onChangeText={(value) => updateQuestion(index, 'marks', value)} keyboardType="number-pad" />
+                    <Field label="Marks *" value={question.marks} onChangeText={(value) => updateQuestion(index, 'marks', value)} keyboardType="number-pad" />
                 </View>
             ))}
-            <PrimaryButton title="Add another question  +" onPress={() => setQuizForm((form) => ({ ...form, questions: [...form.questions, EMPTY_QUESTION()] }))} variant="secondary" />
-            <PrimaryButton title="Create and publish quiz" onPress={createQuiz} loading={creatingQuiz} disabled={creatingQuiz} />
-            <Text style={styles.formNote}>The current Laravel endpoint creates quizzes directly as published, and requires the course, degree, batch, and subject values to match your academic setup.</Text>
+
+            <PrimaryButton
+                title="Add another question  +"
+                onPress={() => setQuizForm((form) => ({ ...form, questions: [...form.questions, EMPTY_QUESTION()] }))}
+                variant="secondary"
+            />
+            <PrimaryButton title="Schedule Quiz" onPress={createQuiz} loading={creatingQuiz} disabled={creatingQuiz} />
+            <Text style={styles.formNote}>
+                Course, Degree and Batch options come from Academic Setup. Subjects are filtered by the selected Course and Degree. The quiz is saved through the existing Laravel API.
+            </Text>
         </KeyboardAvoidingView>
     );
 
@@ -1084,4 +1433,22 @@ const styles = StyleSheet.create({
     resultBigScore: { backgroundColor: '#F4F6FF', borderRadius: 16, padding: 17, alignItems: 'center', marginTop: 20, marginBottom: 14 },
     resultBigScoreLabel: { color: COLORS.muted, fontSize: 9, fontWeight: '900', letterSpacing: 1.1 },
     resultBigScoreValue: { color: COLORS.blue, fontWeight: '900', fontSize: 31, marginTop: 5 },
+    dropdownInput: { width: '100%', minHeight: 47, borderRadius: 11, borderWidth: 1, borderColor: '#E0E6F0', backgroundColor: '#FBFCFF', paddingHorizontal: 12, paddingVertical: 11, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    dropdownValue: { color: COLORS.ink, fontSize: 13, flex: 1, paddingRight: 10 },
+    dropdownPlaceholder: { color: '#9AA5B8' },
+    dropdownChevron: { color: COLORS.muted, fontSize: 19, fontWeight: '800' },
+    dropdownModalOverlay: { flex: 1, backgroundColor: 'rgba(18, 28, 54, 0.45)', justifyContent: 'center', alignItems: 'center', padding: 22 },
+    dropdownModalCard: { width: '100%', maxHeight: '78%', borderRadius: 20, backgroundColor: COLORS.white, padding: 17, borderWidth: 1, borderColor: COLORS.line },
+    dropdownModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+    dropdownModalTitle: { color: COLORS.ink, fontSize: 16, fontWeight: '900', flex: 1 },
+    dropdownModalCloseIcon: { color: COLORS.muted, fontSize: 28, lineHeight: 30, paddingHorizontal: 5 },
+    dropdownOptionsScroll: { flexGrow: 0, maxHeight: 360 },
+    dropdownOption: { minHeight: 46, borderBottomWidth: 1, borderBottomColor: '#EEF1F7', paddingVertical: 11, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    dropdownOptionSelected: { backgroundColor: '#F0F1FF', borderRadius: 9 },
+    dropdownOptionText: { color: COLORS.ink, fontSize: 13, flex: 1 },
+    dropdownOptionTextSelected: { color: COLORS.blue, fontWeight: '900' },
+    dropdownOptionCheck: { color: COLORS.blue, fontWeight: '900', fontSize: 16, marginLeft: 8 },
+    dropdownEmptyText: { color: COLORS.muted, fontSize: 12, lineHeight: 18, paddingVertical: 18 },
+    formSectionTitle: { color: COLORS.ink, fontSize: 16, fontWeight: '900', marginBottom: 16 },
+    questionCountBadge: { color: COLORS.blue, backgroundColor: '#F0F1FF', overflow: 'hidden', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, fontSize: 10, fontWeight: '900' },
 });
