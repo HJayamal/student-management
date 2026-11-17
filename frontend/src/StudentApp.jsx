@@ -575,7 +575,7 @@ function StudentApp() {
     if (checkingSession) {
         return (
             <main className="student-loading-screen">
-                <div className="student-loading-mark">Q</div>
+                <div className="student-loading-mark">S</div>
                 <p>Loading your student portal...</p>
             </main>
         );
@@ -587,8 +587,8 @@ function StudentApp() {
                 <section className="student-login-layout">
                     <div className="student-welcome-panel">
                         <div className="student-brand">
-                            <span className="student-brand-mark">Q</span>
-                            <span>QuizSpace</span>
+                            <span className="student-brand-mark">S</span>
+                            <span>StudentManage</span>
                         </div>
                         <div className="student-welcome-copy">
                             <span className="student-eyebrow">STUDENT PORTAL</span>
@@ -672,8 +672,8 @@ function StudentApp() {
         <div className="student-dashboard-layout">
             <aside className="student-sidebar">
                 <div className="student-brand student-sidebar-brand">
-                    <span className="student-brand-mark">Q</span>
-                    <span>QuizSpace</span>
+                    <span className="student-brand-mark">S</span>
+                    <span>StudentManage</span>
                 </div>
                 <div className="student-sidebar-label">STUDENT WORKSPACE</div>
                 <button
@@ -734,7 +734,7 @@ function StudentApp() {
                                 <h2>Keep moving forward.</h2>
                                 <p>Check your course details and stay ready for your upcoming quizzes.</p>
                             </div>
-                            <div className="student-banner-symbol">Q</div>
+                            <div className="student-banner-symbol">S</div>
                         </section>
 
                         <section className="student-section-heading">
@@ -1180,7 +1180,7 @@ function StudentApp() {
                     </>
                 )}
 
-                <footer className="student-dashboard-footer">QuizSpace Student Portal · Powered by Laravel</footer>
+                <footer className="student-dashboard-footer">StudentManage Student Portal · Powered by Laravel</footer>
             </main>
         </div>
     );

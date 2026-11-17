@@ -621,8 +621,8 @@ function App() {
                 <section className="login-layout">
                     <div className="welcome-panel">
                         <div className="brand">
-                            <div className="brand-icon">Q</div>
-                            <span>QuizSpace</span>
+                            <div className="brand-icon">S</div>
+                            <span>StudentManage</span>
                         </div>
 
                         <div className="welcome-content">
@@ -739,8 +739,8 @@ function App() {
         <div className="dashboard-layout">
             <aside className="sidebar">
                 <div className="brand sidebar-brand">
-                    <div className="brand-icon">Q</div>
-                    <span>QuizSpace</span>
+                    <div className="brand-icon">S</div>
+                    <span>StudentManage</span>
                 </div>
 
                 <p className="sidebar-label">WORKSPACE</p>
@@ -1674,7 +1674,7 @@ function App() {
                 )}
 
                 <footer className="dashboard-footer">
-                    QuizSpace Teacher Portal · Powered by Laravel
+                    StudentManage Teacher Portal · Powered by Laravel
                 </footer>
             </main>
         </div>

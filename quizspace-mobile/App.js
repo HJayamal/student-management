@@ -18,6 +18,8 @@ import { createApi, getApiError, normalizeApiBaseUrl } from './src/api';
 import { formatDate, formatDuration } from './src/format';
 import StudentNotificationsScreen from './src/StudentNotificationsScreen';
 
+const DEFAULT_API_BASE = 'http://10.0.2.2:8000/api';
+
 const COLORS = {
     ink: '#18233F',
     muted: '#73809A',
@@ -42,6 +44,17 @@ const KEYS = {
     user: 'quizspace_user',
 };
 
+const ADMIN_STAT_ITEMS = [
+    { key: 'students', label: 'Students', symbol: '👥', accent: '#5969F6' },
+    { key: 'teachers', label: 'Teachers', symbol: '🧑‍🏫', accent: '#16845B' },
+    { key: 'admissions', label: 'Admissions', symbol: '➕', accent: '#7857E8' },
+    { key: 'courses', label: 'Courses', symbol: '🎓', accent: '#B7791F' },
+    { key: 'degrees', label: 'Degrees', symbol: '🏅', accent: '#0F766E' },
+    { key: 'batches', label: 'Batches', symbol: '▦', accent: '#475569' },
+    { key: 'subjects', label: 'Subjects', symbol: '📚', accent: '#2563EB' },
+    { key: 'exams', label: 'Exams', symbol: '📝', accent: '#C2410C' },
+];
+
 const EMPTY_QUESTION = () => ({
     question_text: '',
     option_a: '',
@@ -56,6 +69,18 @@ function makeFutureLocalDateTime() {
     const date = new Date(Date.now() + 15 * 60 * 1000);
     const pad = (value) => String(value).padStart(2, '0');
     return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+}
+
+function isUpcomingQuiz(quiz) {
+    if (quiz?.status !== 'published' || !quiz?.available_at) return false;
+
+    // Laravel may return a SQL timestamp without a timezone; treat it as UTC.
+    const raw = String(quiz.available_at).trim();
+    const normalized = raw.includes('T') ? raw : raw.replace(' ', 'T');
+    const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(normalized);
+    const availableAt = new Date(hasTimezone ? normalized : `${normalized}Z`);
+
+    return !Number.isNaN(availableAt.getTime()) && availableAt.getTime() > Date.now();
 }
 
 function messageFrom(error) {
@@ -300,7 +325,7 @@ function TeacherSubmissionCard({ item }) {
 
 export default function App() {
     const [booting, setBooting] = useState(true);
-    const [baseInput, setBaseInput] = useState('');
+    const [baseInput, setBaseInput] = useState(DEFAULT_API_BASE);
     const [apiBase, setApiBase] = useState('');
     const [loginRole, setLoginRole] = useState('student');
     const [role, setRole] = useState(null);
@@ -316,6 +341,16 @@ export default function App() {
     const [screen, setScreen] = useState('home');
     const [quizzes, setQuizzes] = useState([]);
     const [results, setResults] = useState([]);
+    const [adminStats, setAdminStats] = useState({});
+    const [adminResource, setAdminResource] = useState(null);
+    const [adminMeta, setAdminMeta] = useState(null);
+    const [adminRecords, setAdminRecords] = useState([]);
+    const [adminModuleLoading, setAdminModuleLoading] = useState(false);
+    const [adminSearch, setAdminSearch] = useState('');
+    const [adminForm, setAdminForm] = useState({});
+    const [adminEditingId, setAdminEditingId] = useState(null);
+    const [adminEditorVisible, setAdminEditorVisible] = useState(false);
+    const [adminSaving, setAdminSaving] = useState(false);
     const [unreadCount, setUnreadCount] = useState(0);
     const [academicOptions, setAcademicOptions] = useState([]);
     const [academicOptionsLoading, setAcademicOptionsLoading] = useState(false);
@@ -396,10 +431,10 @@ export default function App() {
                     SecureStore.getItemAsync(KEYS.user),
                 ]);
                 if (!alive) return;
-                if (savedBase) {
-                    setApiBase(savedBase);
-                    setBaseInput(savedBase);
-                }
+                // Keep the API address configured internally; regular users do not need to edit it.
+                const configuredBase = savedBase || DEFAULT_API_BASE;
+                setApiBase(configuredBase);
+                setBaseInput(configuredBase);
                 if (savedToken && savedRole && savedUser) {
                     setToken(savedToken);
                     setRole(savedRole);
@@ -444,7 +479,7 @@ export default function App() {
                 if (dashboard.student) {
                     await SecureStore.setItemAsync(KEYS.user, JSON.stringify(dashboard.student));
                 }
-            } else {
+            } else if (role === 'teacher') {
                 const [dashboardResponse, quizzesResponse, resultsResponse] = await Promise.all([
                     api.get('/teacher/dashboard'),
                     api.get('/teacher/quizzes'),
@@ -457,6 +492,16 @@ export default function App() {
                 if (dashboard.teacher) {
                     await SecureStore.setItemAsync(KEYS.user, JSON.stringify(dashboard.teacher));
                 }
+            } else if (role === 'admin') {
+                const dashboardResponse = await api.get('/admin/dashboard');
+                const dashboard = dashboardResponse.data || {};
+                setProfile(dashboard.admin || profile);
+                setAdminStats(dashboard.statistics || {});
+                if (dashboard.admin) {
+                    await SecureStore.setItemAsync(KEYS.user, JSON.stringify(dashboard.admin));
+                }
+            } else {
+                throw new Error('Unsupported account role.');
             }
         } catch (fetchError) {
             setError(messageFrom(fetchError));
@@ -464,6 +509,28 @@ export default function App() {
             if (showSpinner) setLoadingData(false);
         }
     }, [api, role, token]);
+
+    const loadAdminModule = useCallback(async (resource, searchValue = '') => {
+        if (!api || role !== 'admin' || !resource) return;
+        setAdminModuleLoading(true);
+        setError('');
+        try {
+            const [schemaResponse, recordsResponse] = await Promise.all([
+                api.get(`/admin/${resource}/schema`),
+                api.get(`/admin/${resource}`, { params: { search: searchValue, per_page: 50 } }),
+            ]);
+            setAdminMeta(schemaResponse.data || null);
+            setAdminRecords(Array.isArray(recordsResponse.data?.records?.data)
+                ? recordsResponse.data.records.data
+                : []);
+        } catch (loadError) {
+            setError(messageFrom(loadError));
+            setAdminMeta(null);
+            setAdminRecords([]);
+        } finally {
+            setAdminModuleLoading(false);
+        }
+    }, [api, role]);
 
     useEffect(() => {
         if (booting || !token || !role || !apiBase) return;
@@ -549,7 +616,7 @@ export default function App() {
             });
             const body = response.data || {};
             const newToken = body.token;
-            const newProfile = body[loginRole] || body.student || body.teacher;
+            const newProfile = body[loginRole] || body.admin || body.student || body.teacher;
             if (!newToken || !newProfile) throw new Error('The server did not return a valid login session.');
             await Promise.all([
                 SecureStore.setItemAsync(KEYS.base, normalizedBase),
@@ -585,6 +652,13 @@ export default function App() {
         setAcademic(null);
         setQuizzes([]);
         setResults([]);
+        setAdminStats({});
+        setAdminResource(null);
+        setAdminMeta(null);
+        setAdminRecords([]);
+        setAdminForm({});
+        setAdminEditingId(null);
+        setAdminEditorVisible(false);
         setUnreadCount(0);
         setActiveQuiz(null);
         setAttemptSession(null);
@@ -854,10 +928,10 @@ export default function App() {
         ? results.reduce((sum, result) => sum + Number(result.percentage ?? 0), 0) / results.length
         : 0;
     const best = results.reduce((max, result) => Math.max(max, Number(result.percentage ?? 0)), 0);
-    const displayName = profile?.name || (role === 'teacher' ? 'Teacher' : 'Student');
+    const displayName = profile?.name || (role === 'admin' ? 'Admin' : role === 'teacher' ? 'Teacher' : 'Student');
 
     if (booting) {
-        return <View style={styles.loadingScreen}><StatusBar barStyle="dark-content" /><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.loadingText}>Loading QuizSpace…</Text></View>;
+        return <View style={styles.loadingScreen}><StatusBar barStyle="dark-content" /><ActivityIndicator size="large" color={COLORS.blue} /><Text style={styles.loadingText}>Loading StudentManage…</Text></View>;
     }
 
     if (!token || !role) {
@@ -866,34 +940,31 @@ export default function App() {
                 <StatusBar barStyle="dark-content" />
                 <ScrollView contentContainerStyle={styles.loginScroll} keyboardShouldPersistTaps="handled">
                     <View style={styles.brandRow}>
-                        <View style={styles.brandMark}><Text style={styles.brandMarkText}>Q</Text></View>
-                        <View><Text style={styles.brandName}>QuizSpace</Text><Text style={styles.brandTagline}>Your campus learning app</Text></View>
+                        <View style={styles.brandMark}><Text style={styles.brandMarkText}>S</Text></View>
+                        <View><Text style={styles.brandName}>StudentManage</Text><Text style={styles.brandTagline}>Your academic management platform</Text></View>
                     </View>
                     <View style={styles.loginHero}>
-                        <Text style={styles.eyebrow}>MOBILE PORTAL</Text>
-                        <Text style={styles.loginTitle}>Learn. Practice. Progress.</Text>
-                        <Text style={styles.loginDescription}>Attempt timed quizzes, keep track of your scores, and access your academic workspace from your phone.</Text>
+                        <Text style={styles.eyebrow}>CAMPUS MANAGEMENT</Text>
+                        <Text style={styles.loginTitle}>Manage. Organize. Grow.</Text>
+                        <Text style={styles.loginDescription}>Manage student records, teacher details, admissions, and academic activities from one place.</Text>
                     </View>
                     <View style={styles.loginCard}>
                         <Text style={styles.loginCardTitle}>Sign in</Text>
                         <Text style={styles.loginCardSubtitle}>Choose your account type to continue.</Text>
                         <View style={styles.roleToggle}>
-                            {['student', 'teacher'].map((item) => (
+                            {['student', 'teacher', 'admin'].map((item) => (
                                 <Pressable key={item} onPress={() => setLoginRole(item)} style={[styles.roleOption, loginRole === item && styles.roleOptionActive]}>
-                                    <Text style={[styles.roleOptionText, loginRole === item && styles.roleOptionTextActive]}>{item === 'student' ? '🎓 Student' : '🧑‍🏫 Teacher'}</Text>
+                                    <Text style={[styles.roleOptionText, loginRole === item && styles.roleOptionTextActive]}>
+                                        {item === 'student' ? '🎓 Student' : item === 'teacher' ? '🧑‍🏫 Teacher' : '🛡️ Admin'}
+                                    </Text>
                                 </Pressable>
                             ))}
                         </View>
-                        <Field label="Laravel API address" value={baseInput} onChangeText={setBaseInput} placeholder="http://192.168.1.20:8000/api" keyboardType="url" helperText="Phone: use your computer's Wi-Fi IPv4 address. Android emulator: http://10.0.2.2:8000/api" />
                         <Field label="Email address" value={email} onChangeText={setEmail} placeholder="you@example.com" keyboardType="email-address" autoCapitalize="none" />
                         <Field label="Password" value={password} onChangeText={setPassword} placeholder="Enter your password" secureTextEntry autoCapitalize="none" />
                         <Notice text={error} />
                         <Notice text={notice} type="success" />
-                        <PrimaryButton title="Sign in to QuizSpace" onPress={handleLogin} loading={loginBusy} disabled={loginBusy} />
-                    </View>
-                    <View style={styles.connectionTip}>
-                        <Text style={styles.connectionTipTitle}>Before signing in</Text>
-                        <Text style={styles.connectionTipText}>Start Laravel using `php artisan serve --host=0.0.0.0 --port=8000`, and keep the phone and computer on the same Wi-Fi network.</Text>
+                        <PrimaryButton title="Sign in to StudentManage" onPress={handleLogin} loading={loginBusy} disabled={loginBusy} />
                     </View>
                 </ScrollView>
             </KeyboardAvoidingView>
@@ -906,43 +977,316 @@ export default function App() {
         setScreen(next);
     };
 
+    const openAdminModule = async (resource) => {
+        setAdminResource(resource);
+        setAdminSearch('');
+        setAdminMeta(null);
+        setAdminRecords([]);
+        setScreen('adminModule');
+        await loadAdminModule(resource, '');
+    };
+
+    const openAdminEditor = (record = null) => {
+        if (!adminMeta) return;
+        const initialForm = {};
+        for (const field of adminMeta.fields || []) {
+            if (field.sensitive) {
+                initialForm[field.name] = '';
+                continue;
+            }
+            const rawValue = record ? record[field.name] : field.default;
+            initialForm[field.name] = rawValue === null || rawValue === undefined ? '' : String(rawValue);
+        }
+        setAdminForm(initialForm);
+        setAdminEditingId(record ? record[adminMeta.primary_key] : null);
+        setAdminEditorVisible(true);
+        setError('');
+    };
+
+    const updateAdminForm = (name, value) => {
+        setAdminForm((current) => ({ ...current, [name]: value }));
+    };
+
+    const saveAdminRecord = async () => {
+        if (!api || !adminResource || !adminMeta || adminSaving) return;
+        setAdminSaving(true);
+        setError('');
+        try {
+            const payload = {};
+            for (const field of adminMeta.fields || []) {
+                payload[field.name] = adminForm[field.name] ?? '';
+            }
+            if (adminEditingId !== null && adminEditingId !== undefined) {
+                await api.put(`/admin/${adminResource}/${adminEditingId}`, payload);
+                setNotice(`${adminMeta.title} record updated successfully.`);
+            } else {
+                await api.post(`/admin/${adminResource}`, payload);
+                setNotice(`${adminMeta.title} record created successfully.`);
+            }
+            setAdminEditorVisible(false);
+            await loadAdminModule(adminResource, adminSearch);
+            await refreshData(false);
+        } catch (saveError) {
+            setError(messageFrom(saveError));
+        } finally {
+            setAdminSaving(false);
+        }
+    };
+
+    const deleteAdminRecord = (record) => {
+        const recordId = record?.[adminMeta?.primary_key || 'id'];
+        const recordName = record?.name || record?.student_name || record?.teacher_name || record?.course_name || record?.degree_name || record?.batch_name || record?.subject_name || record?.exam_name || `record #${recordId}`;
+        Alert.alert(
+            'Delete record?',
+            `Are you sure you want to delete ${recordName}? This action cannot be undone.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                            await api.delete(`/admin/${adminResource}/${recordId}`);
+                            setNotice('Record deleted successfully.');
+                            await loadAdminModule(adminResource, adminSearch);
+                            await refreshData(false);
+                        } catch (deleteError) {
+                            setError(messageFrom(deleteError));
+                        }
+                    },
+                },
+            ],
+        );
+    };
+
+    const adminRecordTitle = (record) => {
+        const combinedName = [record?.first_name, record?.last_name].filter(Boolean).join(' ').trim();
+        return record?.name || combinedName || record?.student_name || record?.teacher_name || record?.course_name || record?.degree_name || record?.batch_name || record?.subject_name || record?.exam_name || record?.title || record?.reg_no || record?.email || `Record #${record?.id ?? ''}`;
+    };
+
+    const adminRecordSubtitle = (record) => {
+        const fields = ['reg_no', 'email', 'phone', 'course_name', 'degree_name', 'batch_name', 'subject_code', 'course_code', 'degree_code', 'batch_code', 'admission_no', 'exam_date', 'created_at'];
+        const value = fields.map((field) => record?.[field]).find((item) => item !== null && item !== undefined && String(item).trim() !== '');
+        return value === undefined ? `Record ID: ${record?.id ?? '—'}` : String(value);
+    };
+
+    const renderAdminManage = () => (
+        <>
+            <SectionTitle title="Management" subtitle="Choose a section to view and manage its records." />
+            <View style={styles.adminManageGrid}>
+                {ADMIN_STAT_ITEMS.map((item) => (
+                    <Pressable key={item.key} onPress={() => openAdminModule(item.key)} style={({ pressed }) => [styles.adminModuleCard, pressed && styles.pressed]}>
+                        <View style={[styles.adminStatSymbol, { backgroundColor: `${item.accent}18` }]}>
+                            <Text style={styles.adminStatSymbolText}>{item.symbol}</Text>
+                        </View>
+                        <Text style={styles.adminModuleTitle}>{item.label}</Text>
+                        <Text style={styles.adminModuleCount}>{adminStats[item.key] === undefined ? '—' : adminStats[item.key]} records</Text>
+                        <Text style={styles.adminModuleAction}>Manage records  →</Text>
+                    </Pressable>
+                ))}
+            </View>
+        </>
+    );
+
+    const renderAdminModule = () => {
+        const currentModule = ADMIN_STAT_ITEMS.find((item) => item.key === adminResource);
+        return (
+            <>
+                <Pressable onPress={() => goTo('adminManage')} style={styles.adminBackAction}>
+                    <Text style={styles.adminBackText}>‹  Back to management</Text>
+                </Pressable>
+                <SectionTitle
+                    title={adminMeta?.title || currentModule?.label || 'Manage records'}
+                    subtitle="Create, view, update and delete records."
+                    action={<Pressable onPress={() => loadAdminModule(adminResource, adminSearch)} style={styles.refreshButton}><Text style={styles.refreshText}>↻ Refresh</Text></Pressable>}
+                />
+                <Field label="Search records" value={adminSearch} onChangeText={setAdminSearch} placeholder="Search by name, email or code" autoCapitalize="none" />
+                <View style={styles.adminToolbarRow}>
+                    <Pressable onPress={() => loadAdminModule(adminResource, adminSearch)} style={[styles.adminToolbarButton, styles.adminSearchButton]}>
+                        <Text style={styles.adminToolbarButtonText}>Search</Text>
+                    </Pressable>
+                    <Pressable onPress={() => openAdminEditor(null)} disabled={!adminMeta} style={[styles.adminToolbarButton, styles.adminAddButton, !adminMeta && styles.buttonDisabled]}>
+                        <Text style={styles.adminToolbarButtonText}>＋ Add new</Text>
+                    </Pressable>
+                </View>
+                {adminModuleLoading ? (
+                    <View style={styles.adminLoadingCard}><ActivityIndicator color={COLORS.blue} /><Text style={styles.loadingBarText}>Loading records…</Text></View>
+                ) : adminRecords.length === 0 ? (
+                    <EmptyState title="No records found" body="Try another search or add a new record to this section." />
+                ) : adminRecords.map((record) => (
+                    <View key={String(record[adminMeta?.primary_key || 'id'])} style={styles.card}>
+                        <View style={styles.cardTopRow}>
+                            <View style={styles.flexOne}>
+                                <Text style={styles.cardTitle}>{adminRecordTitle(record)}</Text>
+                                <Text style={styles.cardSubtitle}>{adminRecordSubtitle(record)}</Text>
+                            </View>
+                            <Text style={styles.adminRecordId}>#{record[adminMeta?.primary_key || 'id']}</Text>
+                        </View>
+                        <View style={styles.adminRecordActions}>
+                            <Pressable onPress={() => openAdminEditor(record)} style={[styles.adminRecordButton, styles.adminEditButton]}>
+                                <Text style={styles.adminEditButtonText}>Edit</Text>
+                            </Pressable>
+                            <Pressable onPress={() => deleteAdminRecord(record)} style={[styles.adminRecordButton, styles.adminDeleteButton]}>
+                                <Text style={styles.adminDeleteButtonText}>Delete</Text>
+                            </Pressable>
+                        </View>
+                    </View>
+                ))}
+                <Text style={styles.adminListFootnote}>Showing up to 50 records. Use search to find older records.</Text>
+            </>
+        );
+    };
+
     const renderHome = () => (
         <>
-            <View style={styles.welcomeCard}>
-                <Text style={styles.welcomeOverline}>{role === 'student' ? 'STUDENT PORTAL' : 'TEACHER WORKSPACE'}</Text>
-                <Text style={styles.welcomeTitle}>Hello, {displayName.split(' ')[0] || displayName}!</Text>
-                <Text style={styles.welcomeBody}>{role === 'student' ? 'Your learning journey, all in one place.' : 'Manage your quizzes and review student submissions.'}</Text>
-            </View>
+            {role !== 'student' && (
+                <View style={styles.welcomeCard}>
+                    <Text style={styles.welcomeOverline}>
+                        {role === 'teacher' ? 'TEACHER WORKSPACE' : 'ADMIN WORKSPACE'}
+                    </Text>
+                    <Text style={styles.welcomeTitle}>Hello, {displayName.split(' ')[0] || displayName}!</Text>
+                    <Text style={styles.welcomeBody}>
+                        {role === 'teacher'
+                            ? 'Manage learning activities, quizzes, and student progress.'
+                            : 'Manage student records, academic setup, and campus activities.'}
+                    </Text>
+                </View>
+            )}
             {role === 'student' ? (
                 <>
-                    <SectionTitle title="Academic profile" subtitle="Your registered study details" />
-                    <View style={styles.card}>
-                        <ProfileRow label="Course" value={academic?.course || 'Not assigned'} />
-                        <ProfileRow label="Degree" value={academic?.degree || 'Not assigned'} />
-                        <ProfileRow label="Batch" value={academic?.batch || 'Not assigned'} />
-                        <ProfileRow label="Admission" value={academic?.admission_status || 'Not linked'} last />
+                    <View style={styles.studentHeroCard}>
+                        <View style={styles.studentHeroTopRow}>
+                            <View style={styles.studentHeroCopy}>
+                                <Text style={styles.studentHeroOverline}>STUDENT DASHBOARD</Text>
+                                <Text style={styles.studentHeroGreeting}>Welcome back,</Text>
+                                <Text style={styles.studentHeroName}>{displayName.split(' ')[0] || displayName}!</Text>
+                            </View>
+                            <View style={styles.studentHeroAvatar}>
+                                <Text style={styles.studentHeroAvatarText}>{String(displayName || 'S').trim().charAt(0).toUpperCase()}</Text>
+                            </View>
+                        </View>
+                        <Text style={styles.studentHeroBody}>Your academic journey, organized in one place. Keep track of your learning and stay up to date.</Text>
+                        <Pressable onPress={() => refreshData(true)} style={({ pressed }) => [styles.studentHeroRefresh, pressed && styles.pressed]}>
+                            <Text style={styles.studentHeroRefreshText}>↻  Refresh overview</Text>
+                        </Pressable>
                     </View>
-                    <SectionTitle title="Your progress" subtitle="Based on submitted attempts" />
+
+                    <SectionTitle title="Your progress" subtitle="A quick look at your learning activity" />
                     <View style={styles.statsRow}>
                         <StatCard label="Attempts" value={results.length} symbol="✓" />
                         <StatCard label="Average" value={`${average.toFixed(1)}%`} accent={COLORS.green} symbol="↗" />
                         <StatCard label="Best score" value={`${best.toFixed(0)}%`} accent={COLORS.purple} symbol="★" />
                     </View>
-                    <PrimaryButton title="View my quizzes  →" onPress={() => goTo('quizzes')} />
+
+                    <SectionTitle title="Quick access" subtitle="Go directly to your student tools" />
+                    <View style={styles.studentQuickActionsRow}>
+                        <Pressable onPress={() => goTo('quizzes')} style={({ pressed }) => [styles.studentQuickAction, pressed && styles.pressed]}>
+                            <View style={[styles.studentQuickActionIcon, { backgroundColor: '#EEF1FF' }]}><Text style={styles.studentQuickActionIconText}>📘</Text></View>
+                            <Text style={styles.studentQuickActionLabel}>Quizzes</Text>
+                            <Text style={styles.studentQuickActionHint}>Learning activities</Text>
+                        </Pressable>
+                        <Pressable onPress={() => goTo('results')} style={({ pressed }) => [styles.studentQuickAction, pressed && styles.pressed]}>
+                            <View style={[styles.studentQuickActionIcon, { backgroundColor: '#EAF8F1' }]}><Text style={styles.studentQuickActionIconText}>📊</Text></View>
+                            <Text style={styles.studentQuickActionLabel}>Results</Text>
+                            <Text style={styles.studentQuickActionHint}>Your performance</Text>
+                        </Pressable>
+                        <Pressable onPress={() => goTo('notifications')} style={({ pressed }) => [styles.studentQuickAction, pressed && styles.pressed]}>
+                            <View style={[styles.studentQuickActionIcon, { backgroundColor: '#FFF4E7' }]}>
+                                <Text style={styles.studentQuickActionIconText}>🔔</Text>
+                                {unreadCount > 0 && <View style={styles.studentQuickActionBadge}><Text style={styles.studentQuickActionBadgeText}>{unreadCount > 9 ? '9+' : unreadCount}</Text></View>}
+                            </View>
+                            <Text style={styles.studentQuickActionLabel}>Alerts</Text>
+                            <Text style={styles.studentQuickActionHint}>{unreadCount > 0 ? `${unreadCount} unread` : 'Notifications'}</Text>
+                        </Pressable>
+                    </View>
+
+                    <SectionTitle title="Academic overview" subtitle="Your registered study details" />
+                    <View style={styles.studentAcademicCard}>
+                        <View style={styles.studentAcademicHeader}>
+                            <View style={styles.studentAcademicIcon}><Text style={styles.studentAcademicIconText}>🎓</Text></View>
+                            <View style={styles.flexOne}>
+                                <Text style={styles.studentAcademicTitle}>My academic details</Text>
+                                <Text style={styles.studentAcademicSubtitle}>Your current study information</Text>
+                            </View>
+                        </View>
+                        <ProfileRow label="Course" value={academic?.course || 'Not assigned'} />
+                        <ProfileRow label="Degree" value={academic?.degree || 'Not assigned'} />
+                        <ProfileRow label="Batch" value={academic?.batch || 'Not assigned'} />
+                        <ProfileRow label="Admission" value={academic?.admission_status || 'Not linked'} last />
+                    </View>
+
+                    <SectionTitle
+                        title="Latest learning activities"
+                        subtitle="Your recently assigned quizzes"
+                        action={<Pressable onPress={() => goTo('quizzes')} style={styles.refreshButton}><Text style={styles.refreshText}>View all →</Text></Pressable>}
+                    />
+                    {quizzes.length === 0 ? (
+                        <EmptyState title="No learning activities yet" body="New quizzes assigned to your academic group will appear here." />
+                    ) : quizzes.slice(0, 2).map((quiz) => (
+                        <QuizCard key={`student-home-${quiz.id}`} quiz={quiz} onStart={openQuiz} starting={startingQuizId === quiz.id} />
+                    ))}
                 </>
-            ) : (
+            ) : role === 'teacher' ? (
                 <>
                     <View style={styles.statsRow}>
                         <StatCard label="My quizzes" value={quizzes.length} symbol="▤" />
                         <StatCard label="Submissions" value={results.length} accent={COLORS.green} symbol="✓" />
                     </View>
-                    <View style={styles.card}>
-                        <ProfileRow label="Email" value={profile?.email || '—'} />
-                        <ProfileRow label="Teaching subject" value={profile?.subject || '—'} last />
-                    </View>
+
+                    <SectionTitle title="Quick actions" subtitle="Common teacher tasks" />
                     <PrimaryButton title="Create a quiz  +" onPress={() => goTo('create')} />
                     <PrimaryButton title="Review student results  →" onPress={() => goTo('results')} variant="secondary" />
-                    <PrimaryButton title="Sign out" onPress={handleLogout} variant="danger" />
+
+                    <SectionTitle
+                        title="Upcoming quizzes"
+                        subtitle="Published quizzes that are not available yet"
+                        action={<Pressable onPress={() => refreshData(false)} style={styles.refreshButton}><Text style={styles.refreshText}>↻ Refresh</Text></Pressable>}
+                    />
+                    {quizzes.filter(isUpcomingQuiz).length === 0 ? (
+                        <EmptyState title="No upcoming quizzes" body="Scheduled quizzes will appear here before their availability time." />
+                    ) : quizzes.filter(isUpcomingQuiz).slice(0, 3).map((quiz) => (
+                        <QuizCard key={quiz.id} quiz={{ ...quiz, is_available: false }} />
+                    ))}
+
+                    <SectionTitle
+                        title="Recent submissions"
+                        subtitle="Latest student quiz attempts"
+                        action={<Pressable onPress={() => goTo('results')} style={styles.refreshButton}><Text style={styles.refreshText}>View all →</Text></Pressable>}
+                    />
+                    {results.length === 0 ? (
+                        <EmptyState title="No submissions yet" body="Student submissions will appear here after they complete your quizzes." />
+                    ) : results.slice(0, 3).map((item) => (
+                        <TeacherSubmissionCard key={item.id} item={item} />
+                    ))}
+                </>
+            ) : (
+                <>
+                    <SectionTitle
+                        title="System overview"
+                        subtitle="Live totals from your student management database"
+                        action={<Pressable onPress={() => refreshData(true)} style={styles.refreshButton}><Text style={styles.refreshText}>↻ Refresh</Text></Pressable>}
+                    />
+                    <View style={styles.adminStatsGrid}>
+                        {ADMIN_STAT_ITEMS.map((item) => (
+                            <Pressable key={item.key} onPress={() => openAdminModule(item.key)} style={({ pressed }) => [styles.adminStatCard, pressed && styles.pressed]}>
+                                <View style={[styles.adminStatSymbol, { backgroundColor: `${item.accent}18` }]}>
+                                    <Text style={styles.adminStatSymbolText}>{item.symbol}</Text>
+                                </View>
+                                <Text style={styles.adminStatValue}>
+                                    {adminStats[item.key] === undefined ? '—' : adminStats[item.key]}
+                                </Text>
+                                <Text style={styles.adminStatLabel}>{item.label}</Text>
+                                <Text style={styles.adminStatManage}>Manage  →</Text>
+                            </Pressable>
+                        ))}
+                    </View>
+                    <View style={styles.adminInfoCard}>
+                        <Text style={styles.adminInfoTitle}>Management workspace</Text>
+                        <Text style={styles.adminInfoBody}>
+                            Tap any statistics card to manage its records, or open the Management tab to see all eight sections.
+                            All changes are sent to the protected Laravel Admin API.
+                        </Text>
+                    </View>
                 </>
             )}
         </>
@@ -1185,9 +1529,17 @@ export default function App() {
         <View style={styles.appRoot}>
             <StatusBar barStyle="dark-content" backgroundColor={COLORS.background} />
             <View style={styles.topBar}>
-                <View style={styles.topBrandMark}><Text style={styles.topBrandMarkText}>Q</Text></View>
-                <View style={styles.topBarCopy}><Text style={styles.topBarTitle}>QuizSpace</Text><Text style={styles.topBarSubtitle}>{role === 'student' ? 'Student portal' : 'Teacher workspace'}</Text></View>
-                <Pressable onPress={handleLogout} style={styles.signOutButton}><Text style={styles.signOutText}>Sign out</Text></Pressable>
+                <View style={styles.topBrandMark}><Text style={styles.topBrandMarkText}>S</Text></View>
+                <View style={styles.topBarCopy}>
+                    <Text style={styles.topBarTitle}>StudentManage</Text>
+                    <Text style={styles.topBarSubtitle}>
+                        {role === 'student'
+                            ? 'Student Portal · Your academic workspace'
+                            : role === 'teacher'
+                                ? 'Teacher Workspace · Manage learning activities'
+                                : 'Admin Workspace · Manage the platform'}
+                    </Text>
+                </View>
             </View>
             {(error || notice) && screen !== 'takeQuiz' && screen !== 'quizResult' && <View style={styles.globalNotice}><Notice text={error} /><Notice text={notice} type="success" /></View>}
             {loadingData && <View style={styles.loadingBar}><ActivityIndicator size="small" color={COLORS.blue} /><Text style={styles.loadingBarText}>Loading your workspace…</Text></View>}
@@ -1199,6 +1551,8 @@ export default function App() {
                 showsVerticalScrollIndicator={false}
             >
                 {screen === 'home' && renderHome()}
+                {screen === 'adminManage' && role === 'admin' && renderAdminManage()}
+                {screen === 'adminModule' && role === 'admin' && renderAdminModule()}
                 {screen === 'quizzes' && renderQuizzes()}
                 {screen === 'results' && renderResults()}
                 {screen === 'notifications' && role === 'student' && (
@@ -1216,7 +1570,10 @@ export default function App() {
                         <View style={styles.card}>
                             <ProfileRow label="Name" value={profile?.name || '—'} />
                             <ProfileRow label="Email" value={profile?.email || '—'} />
-                            <ProfileRow label={role === 'student' ? 'Registration number' : 'Teaching subject'} value={role === 'student' ? (profile?.reg_no || '—') : (profile?.subject || '—')} />
+                            <ProfileRow
+                                label={role === 'student' ? 'Registration number' : role === 'teacher' ? 'Teaching subject' : 'Account role'}
+                                value={role === 'student' ? (profile?.reg_no || '—') : role === 'teacher' ? (profile?.subject || '—') : (profile?.role || 'admin')}
+                            />
                             <ProfileRow label="API endpoint" value={apiBase || '—'} last />
                         </View>
                         <PrimaryButton title="Refresh data" onPress={() => refreshData(true)} variant="secondary" />
@@ -1224,17 +1581,90 @@ export default function App() {
                     </>
                 )}
             </ScrollView>
+            <Modal
+                visible={adminEditorVisible}
+                animationType="slide"
+                presentationStyle="fullScreen"
+                onRequestClose={() => setAdminEditorVisible(false)}
+            >
+                <KeyboardAvoidingView style={styles.adminEditorRoot} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+                    <View style={styles.adminEditorHeader}>
+                        <View style={styles.flexOne}>
+                            <Text style={styles.adminEditorTitle}>{adminEditingId !== null ? 'Edit record' : 'Add new record'}</Text>
+                            <Text style={styles.cardSubtitle}>{adminMeta?.title || 'Admin management'}</Text>
+                        </View>
+                        <Pressable onPress={() => setAdminEditorVisible(false)} style={styles.adminCloseButton}>
+                            <Text style={styles.adminCloseButtonText}>×</Text>
+                        </Pressable>
+                    </View>
+                    <ScrollView contentContainerStyle={styles.adminEditorContent} keyboardShouldPersistTaps="handled">
+                        <Notice text={error} />
+                        {(adminMeta?.fields || []).map((field) => {
+                            const currentValue = adminForm[field.name] ?? '';
+                            const selectedOption = (field.options || []).find((option) => String(option.value) === String(currentValue));
+                            const label = `${field.label}${field.required && adminEditingId === null ? ' *' : ''}`;
+                            if (field.type === 'select') {
+                                return (
+                                    <DropdownField
+                                        key={field.name}
+                                        label={label}
+                                        value={selectedOption?.label || ''}
+                                        placeholder={`Select ${field.label.toLowerCase()}`}
+                                        options={(field.options || []).map((option) => option.label)}
+                                        onSelect={(optionLabel) => {
+                                            const option = (field.options || []).find((item) => item.label === optionLabel);
+                                            updateAdminForm(field.name, option ? String(option.value) : '');
+                                        }}
+                                        helperText={field.helper}
+                                        disabled={!field.options || field.options.length === 0}
+                                        emptyMessage="No matching records are available. Add the related record first."
+                                    />
+                                );
+                            }
+                            return (
+                                <Field
+                                    key={field.name}
+                                    label={label}
+                                    value={String(currentValue)}
+                                    onChangeText={(value) => updateAdminForm(field.name, value)}
+                                    placeholder={field.type === 'date' ? 'YYYY-MM-DD' : field.type === 'datetime' ? 'YYYY-MM-DD HH:mm:ss' : field.sensitive && adminEditingId !== null ? 'Leave blank to keep current password' : `Enter ${field.label.toLowerCase()}`}
+                                    secureTextEntry={field.sensitive}
+                                    keyboardType={field.type === 'number' ? 'numeric' : field.name === 'email' ? 'email-address' : 'default'}
+                                    multiline={field.type === 'multiline'}
+                                    autoCapitalize={field.name === 'email' ? 'none' : 'sentences'}
+                                    helperText={field.sensitive && adminEditingId !== null ? 'Leave this empty to keep the existing password.' : field.helper}
+                                />
+                            );
+                        })}
+                        <PrimaryButton title={adminSaving ? 'Saving…' : adminEditingId !== null ? 'Save changes' : 'Create record'} onPress={saveAdminRecord} loading={adminSaving} disabled={adminSaving} />
+                        <PrimaryButton title="Cancel" onPress={() => setAdminEditorVisible(false)} variant="secondary" disabled={adminSaving} />
+                    </ScrollView>
+                </KeyboardAvoidingView>
+            </Modal>
             {screen !== 'takeQuiz' && screen !== 'quizResult' && (
                 <View style={styles.bottomNav}>
-                    <NavItem label="Home" icon="⌂" active={screen === 'home'} onPress={() => goTo('home')} />
-                    <NavItem label="Quizzes" icon="▤" active={screen === 'quizzes'} onPress={() => goTo('quizzes')} />
-                    <NavItem label="Results" icon="▥" active={screen === 'results'} onPress={() => goTo('results')} />
-                    {role === 'teacher' ? (
-                        <NavItem label="Create" icon="+" active={screen === 'create'} onPress={() => goTo('create')} />
+                    {role === 'admin' ? (
+                        <>
+                            <NavItem label="Home" icon="⌂" active={screen === 'home'} onPress={() => goTo('home')} />
+                            <NavItem label="Manage" icon="▦" active={screen === 'adminManage' || screen === 'adminModule'} onPress={() => goTo('adminManage')} />
+                            <NavItem label="Profile" icon="◉" active={screen === 'profile'} onPress={() => goTo('profile')} />
+                        </>
                     ) : (
                         <>
-                            <NavItem label="Alerts" icon="🔔" badge={unreadCount} active={screen === 'notifications'} onPress={() => goTo('notifications')} />
-                            <NavItem label="Profile" icon="◉" active={screen === 'profile'} onPress={() => goTo('profile')} />
+                            <NavItem label="Home" icon="⌂" active={screen === 'home'} onPress={() => goTo('home')} />
+                            <NavItem label="Quizzes" icon="▤" active={screen === 'quizzes'} onPress={() => goTo('quizzes')} />
+                            <NavItem label="Results" icon="▥" active={screen === 'results'} onPress={() => goTo('results')} />
+                            {role === 'teacher' ? (
+                                <>
+                                    <NavItem label="Create" icon="+" active={screen === 'create'} onPress={() => goTo('create')} />
+                                    <NavItem label="Profile" icon="◉" active={screen === 'profile'} onPress={() => goTo('profile')} />
+                                </>
+                            ) : (
+                                <>
+                                    <NavItem label="Alerts" icon="🔔" badge={unreadCount} active={screen === 'notifications'} onPress={() => goTo('notifications')} />
+                                    <NavItem label="Profile" icon="◉" active={screen === 'profile'} onPress={() => goTo('profile')} />
+                                </>
+                            )}
                         </>
                     )}
                 </View>
@@ -1268,7 +1698,7 @@ function NavItem({ label, icon, active, onPress, badge = 0 }) {
 }
 
 const styles = StyleSheet.create({
-    appRoot: { flex: 1, backgroundColor: COLORS.background },
+    appRoot: { flex: 1, backgroundColor: COLORS.background, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 },
     loadingScreen: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: COLORS.background, gap: 14 },
     loadingText: { color: COLORS.muted, fontSize: 14 },
     loginScreen: { flex: 1, backgroundColor: COLORS.background },
@@ -1276,7 +1706,7 @@ const styles = StyleSheet.create({
     brandRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 34 },
     brandMark: { width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center', backgroundColor: COLORS.blue },
     brandMarkText: { color: '#fff', fontSize: 25, fontWeight: '900' },
-    brandName: { color: COLORS.ink, fontSize: 22, fontWeight: '900', letterSpacing: -0.5 },
+    brandName: { color: COLORS.ink, fontSize: 20, fontWeight: '900', letterSpacing: -0.5 },
     brandTagline: { color: COLORS.muted, fontSize: 12, marginTop: 3 },
     loginHero: { marginBottom: 22 },
     eyebrow: { color: COLORS.blue, fontSize: 10, fontWeight: '900', letterSpacing: 1.6, marginBottom: 9 },
@@ -1328,6 +1758,31 @@ const styles = StyleSheet.create({
     loadingBarText: { color: COLORS.muted, fontSize: 11 },
     mainScroll: { flex: 1 },
     mainContent: { paddingHorizontal: 16, paddingTop: 18, paddingBottom: 28 },
+    studentHeroCard: { borderRadius: 24, padding: 20, backgroundColor: COLORS.navy, marginBottom: 20, overflow: 'hidden' },
+    studentHeroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+    studentHeroCopy: { flex: 1 },
+    studentHeroOverline: { color: '#BFC8FF', fontSize: 9, letterSpacing: 1.5, fontWeight: '900', marginBottom: 10 },
+    studentHeroGreeting: { color: '#D6DCF4', fontSize: 13, fontWeight: '700' },
+    studentHeroName: { color: '#FFFFFF', fontSize: 28, lineHeight: 34, letterSpacing: -0.8, fontWeight: '900', marginTop: 2 },
+    studentHeroAvatar: { width: 58, height: 58, borderRadius: 20, backgroundColor: '#6875F5', borderWidth: 2, borderColor: '#8D97FF', alignItems: 'center', justifyContent: 'center' },
+    studentHeroAvatarText: { color: '#FFFFFF', fontSize: 25, fontWeight: '900' },
+    studentHeroBody: { color: '#D6DCF4', fontSize: 11, lineHeight: 18, marginTop: 14, maxWidth: 300 },
+    studentHeroRefresh: { alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.12)', marginTop: 15 },
+    studentHeroRefreshText: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+    studentQuickActionsRow: { flexDirection: 'row', gap: 9, marginBottom: 16 },
+    studentQuickAction: { flex: 1, minWidth: 0, minHeight: 112, borderRadius: 16, borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.white, padding: 11 },
+    studentQuickActionIcon: { width: 34, height: 34, borderRadius: 11, alignItems: 'center', justifyContent: 'center', marginBottom: 9, position: 'relative' },
+    studentQuickActionIconText: { fontSize: 17 },
+    studentQuickActionLabel: { color: COLORS.ink, fontSize: 11, fontWeight: '900' },
+    studentQuickActionHint: { color: COLORS.muted, fontSize: 8, lineHeight: 12, marginTop: 4 },
+    studentQuickActionBadge: { position: 'absolute', top: -5, right: -6, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center' },
+    studentQuickActionBadgeText: { color: COLORS.white, fontSize: 8, lineHeight: 10, fontWeight: '900' },
+    studentAcademicCard: { borderRadius: 18, borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.white, padding: 16, marginBottom: 12, shadowColor: '#1D284D', shadowOpacity: 0.025, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 1 },
+    studentAcademicHeader: { flexDirection: 'row', alignItems: 'center', gap: 11, paddingBottom: 11, marginBottom: 2, borderBottomWidth: 1, borderBottomColor: '#EEF1F7' },
+    studentAcademicIcon: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#EEF1FF', alignItems: 'center', justifyContent: 'center' },
+    studentAcademicIconText: { fontSize: 18 },
+    studentAcademicTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '900' },
+    studentAcademicSubtitle: { color: COLORS.muted, fontSize: 10, marginTop: 3 },
     welcomeCard: { borderRadius: 22, padding: 22, backgroundColor: COLORS.navy, marginBottom: 21 },
     welcomeOverline: { color: '#BFC8FF', fontSize: 10, letterSpacing: 1.4, fontWeight: '900', marginBottom: 10 },
     welcomeTitle: { color: '#FFFFFF', fontSize: 27, letterSpacing: -0.7, fontWeight: '900', marginBottom: 8 },
@@ -1365,6 +1820,43 @@ const styles = StyleSheet.create({
     profileRowLast: { borderBottomWidth: 0 },
     profileLabel: { color: COLORS.muted, fontSize: 11, flex: 0.8 },
     profileValue: { color: COLORS.ink, fontSize: 11, fontWeight: '800', flex: 1.2, textAlign: 'right' },
+    adminStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', marginBottom: 14 },
+    adminStatCard: { width: '48.5%', minHeight: 126, borderRadius: 16, borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.white, padding: 13, marginBottom: 10 },
+    adminStatManage: { color: COLORS.blue, fontSize: 9, fontWeight: '900', marginTop: 7 },
+    adminManageGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between' },
+    adminModuleCard: { width: '48.5%', minHeight: 135, borderRadius: 16, borderWidth: 1, borderColor: COLORS.line, backgroundColor: COLORS.white, padding: 13, marginBottom: 11 },
+    adminModuleTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '900', marginTop: 2 },
+    adminModuleCount: { color: COLORS.muted, fontSize: 10, marginTop: 4 },
+    adminModuleAction: { color: COLORS.blue, fontSize: 10, fontWeight: '900', marginTop: 9 },
+    adminBackAction: { alignSelf: 'flex-start', paddingVertical: 7, paddingHorizontal: 2, marginBottom: 5 },
+    adminBackText: { color: COLORS.blue, fontSize: 12, fontWeight: '900' },
+    adminToolbarRow: { flexDirection: 'row', gap: 9, marginBottom: 12 },
+    adminToolbarButton: { minHeight: 42, paddingHorizontal: 14, paddingVertical: 11, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
+    adminSearchButton: { backgroundColor: '#EEF1FB', borderWidth: 1, borderColor: '#DCE3F2' },
+    adminAddButton: { flex: 1, backgroundColor: COLORS.blue },
+    adminToolbarButtonText: { color: COLORS.ink, fontSize: 11, fontWeight: '900' },
+    adminRecordId: { color: COLORS.muted, fontSize: 10, fontWeight: '800' },
+    adminRecordActions: { flexDirection: 'row', gap: 9, borderTopWidth: 1, borderTopColor: '#EEF1F7', paddingTop: 11, marginTop: 3 },
+    adminRecordButton: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderWidth: 1 },
+    adminEditButton: { backgroundColor: '#F0F1FF', borderColor: '#DDE0FF' },
+    adminDeleteButton: { backgroundColor: COLORS.redBg, borderColor: '#F1C8CE' },
+    adminEditButtonText: { color: COLORS.blue, fontSize: 11, fontWeight: '900' },
+    adminDeleteButtonText: { color: COLORS.red, fontSize: 11, fontWeight: '900' },
+    adminListFootnote: { color: COLORS.muted, fontSize: 10, textAlign: 'center', marginVertical: 8 },
+    adminLoadingCard: { minHeight: 100, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1, borderColor: COLORS.line, marginBottom: 12 },
+    adminEditorRoot: { flex: 1, backgroundColor: COLORS.background, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 },
+    adminEditorHeader: { minHeight: 70, paddingHorizontal: 18, paddingVertical: 12, backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.line, flexDirection: 'row', alignItems: 'center', gap: 12 },
+    adminEditorTitle: { color: COLORS.ink, fontSize: 18, fontWeight: '900' },
+    adminCloseButton: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F0F1F7', alignItems: 'center', justifyContent: 'center' },
+    adminCloseButtonText: { color: COLORS.ink, fontSize: 24, lineHeight: 27, fontWeight: '700' },
+    adminEditorContent: { padding: 18, paddingBottom: 40 },
+    adminStatSymbol: { width: 31, height: 31, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 9 },
+    adminStatSymbolText: { fontSize: 15, fontWeight: '900' },
+    adminStatValue: { color: COLORS.ink, fontSize: 21, fontWeight: '900' },
+    adminStatLabel: { color: COLORS.muted, fontSize: 10, fontWeight: '700', marginTop: 3 },
+    adminInfoCard: { backgroundColor: '#EEF1FB', borderRadius: 16, padding: 16, marginTop: 4, marginBottom: 12 },
+    adminInfoTitle: { color: COLORS.ink, fontSize: 13, fontWeight: '900', marginBottom: 6 },
+    adminInfoBody: { color: COLORS.muted, fontSize: 11, lineHeight: 17 },
     scorePill: { paddingVertical: 7, paddingHorizontal: 9, borderRadius: 10 },
     scoreGood: { backgroundColor: COLORS.greenBg },
     scoreLow: { backgroundColor: COLORS.redBg },

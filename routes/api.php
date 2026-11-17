@@ -1,4 +1,3 @@
-
 <?php
 
 use Illuminate\Http\Request;
@@ -18,6 +17,10 @@ use App\Http\Controllers\TeacherAuthController;
 use App\Http\Controllers\TeacherDashboardController;
 use App\Http\Controllers\TeacherQuizController;
 use App\Http\Controllers\TeacherResultsController;
+use App\Http\Controllers\AdminAuthController;
+use App\Http\Middleware\EnsureAdmin;
+use App\Http\Controllers\AdminDashboardController;
+use App\Http\Controllers\AdminCrudController;
 
 /*
 |--------------------------------------------------------------------------
@@ -39,6 +42,9 @@ Route::post('/student/login', [StudentAuthController::class, 'login']);
 
 // Teacher Login
 Route::post('/teacher/login', [TeacherAuthController::class, 'login']);
+
+// Admin Login (public endpoint; issues a token only to role=admin accounts)
+Route::post('/admin/login', [AdminAuthController::class, 'login']);
 
 // Protected Teacher Dashboard
 Route::middleware('auth:sanctum')->get(
@@ -351,4 +357,40 @@ Route::middleware('auth:sanctum')->group(function () {
         [TeacherQuizController::class, 'publish']
     );
 
+
+    // ---------------- Admin APIs ----------------
+    // All routes in this group require a valid Sanctum token and admin role.
+    Route::middleware(EnsureAdmin::class)
+        ->prefix('admin')
+        ->group(function () {
+
+            Route::get(
+                '/dashboard',
+                [AdminDashboardController::class, 'index']
+            );
+
+            Route::post(
+                '/logout',
+                [AdminAuthController::class, 'logout']
+            );
+
+
+
+            Route::get('/{resource}/schema', [AdminCrudController::class, 'schema'])
+                ->where('resource', 'students|teachers|admissions|courses|degrees|batches|subjects|exams');
+
+            Route::get('/{resource}', [AdminCrudController::class, 'index'])
+                ->where('resource', 'students|teachers|admissions|courses|degrees|batches|subjects|exams');
+
+            Route::post('/{resource}', [AdminCrudController::class, 'store'])
+                ->where('resource', 'students|teachers|admissions|courses|degrees|batches|subjects|exams');
+
+            Route::put('/{resource}/{id}', [AdminCrudController::class, 'update'])
+                ->where('resource', 'students|teachers|admissions|courses|degrees|batches|subjects|exams');
+
+            Route::delete('/{resource}/{id}', [AdminCrudController::class, 'destroy'])
+                ->where('resource', 'students|teachers|admissions|courses|degrees|batches|subjects|exams');
+
+
+        });
 });
