@@ -21,6 +21,7 @@ use App\Http\Controllers\AdminAuthController;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Controllers\AdminDashboardController;
 use App\Http\Controllers\AdminCrudController;
+use App\Http\Controllers\LectureMaterialController;
 
 /*
 |--------------------------------------------------------------------------
@@ -358,6 +359,16 @@ Route::middleware('auth:sanctum')->group(function () {
     );
 
 
+    // ---------------- Lecture Materials APIs ----------------
+
+    // Teachers can list their own materials, upload/share, and delete their own items.
+    Route::get('/teacher/materials', [LectureMaterialController::class, 'teacherIndex']);
+    Route::post('/teacher/materials', [LectureMaterialController::class, 'store']);
+    Route::delete('/teacher/materials/{material}', [LectureMaterialController::class, 'destroy']);
+
+    // Students can view materials shared by teachers.
+    Route::get('/student/materials', [LectureMaterialController::class, 'studentIndex']);
+
     // ---------------- Admin APIs ----------------
     // All routes in this group require a valid Sanctum token and admin role.
     Route::middleware(EnsureAdmin::class)
@@ -394,3 +405,8 @@ Route::middleware('auth:sanctum')->group(function () {
 
         });
 });
+
+// Temporary signed download route. The URL expires after 12 hours.
+Route::get('/lecture-materials/{material}/download', [LectureMaterialController::class, 'download'])
+    ->middleware('signed')
+    ->name('lecture-materials.download');

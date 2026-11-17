@@ -3,6 +3,7 @@ import {
     ActivityIndicator,
     Alert,
     KeyboardAvoidingView,
+    Linking,
     Modal,
     Platform,
     Pressable,
@@ -14,6 +15,7 @@ import {
     View,
 } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
+import * as DocumentPicker from 'expo-document-picker';
 import { createApi, getApiError, normalizeApiBaseUrl } from './src/api';
 import { formatDate, formatDuration } from './src/format';
 import StudentNotificationsScreen from './src/StudentNotificationsScreen';
@@ -43,6 +45,8 @@ const KEYS = {
     role: 'quizspace_role',
     user: 'quizspace_user',
 };
+
+const MAX_MATERIAL_BYTES = 25 * 1024 * 1024;
 
 const ADMIN_STAT_ITEMS = [
     { key: 'students', label: 'Students', symbol: '👥', accent: '#5969F6' },
@@ -358,6 +362,15 @@ export default function App() {
     const [subjects, setSubjects] = useState([]);
     const [subjectsLoading, setSubjectsLoading] = useState(false);
     const [subjectsError, setSubjectsError] = useState('');
+    const [materials, setMaterials] = useState([]);
+    const [materialsLoading, setMaterialsLoading] = useState(false);
+    const [materialsError, setMaterialsError] = useState('');
+    const [materialMode, setMaterialMode] = useState('file');
+    const [materialTitle, setMaterialTitle] = useState('');
+    const [materialDescription, setMaterialDescription] = useState('');
+    const [materialLink, setMaterialLink] = useState('');
+    const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
+    const [savingMaterial, setSavingMaterial] = useState(false);
     const [startingQuizId, setStartingQuizId] = useState(null);
 
     const [activeQuiz, setActiveQuiz] = useState(null);
@@ -387,6 +400,192 @@ export default function App() {
         if (!apiBase) return null;
         try { return createApi(apiBase, token); } catch { return null; }
     }, [apiBase, token]);
+
+    const loadMaterials = useCallback(async (showSpinner = true) => {
+        if (!api || !role || !token || (role !== 'teacher' && role !== 'student')) return;
+        if (showSpinner) setMaterialsLoading(true);
+        setMaterialsError('');
+        try {
+            const endpoint = role === 'teacher' ? '/teacher/materials' : '/student/materials';
+            const response = await api.get(endpoint);
+            setMaterials(Array.isArray(response.data?.materials) ? response.data.materials : []);
+        } catch (loadError) {
+            setMaterialsError(messageFrom(loadError));
+            setMaterials([]);
+        } finally {
+            if (showSpinner) setMaterialsLoading(false);
+        }
+    }, [api, role, token]);
+
+    useEffect(() => {
+        if (screen !== 'materials') return;
+        void loadMaterials(true);
+    }, [screen, loadMaterials]);
+
+    const chooseMaterialFile = async () => {
+        try {
+            const result = await DocumentPicker.getDocumentAsync({
+                type: [
+                    'application/pdf',
+                    'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    'application/vnd.ms-powerpoint',
+                    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                ],
+                copyToCacheDirectory: true,
+                multiple: false,
+            });
+            if (!result.canceled && result.assets?.length) {
+                setSelectedMaterialFile(result.assets[0]);
+                setMaterialsError('');
+            }
+        } catch (pickerError) {
+            setMaterialsError(pickerError?.message || 'Could not open the document picker.');
+        }
+    };
+
+    const shareMaterial = async () => {
+        if (!api || role !== 'teacher') return;
+        setMaterialsError('');
+        setError('');
+
+        if (!materialTitle.trim()) {
+            setMaterialsError('Enter a title for this lecture material.');
+            return;
+        }
+        if (materialMode === 'file' && !selectedMaterialFile) {
+            setMaterialsError('Choose a PDF, PowerPoint, or Word file.');
+            return;
+        }
+        if (materialMode === 'link' && !/^https?:\/\//i.test(materialLink.trim())) {
+            setMaterialsError('Enter a valid link starting with https:// or http://.');
+            return;
+        }
+
+        setSavingMaterial(true);
+
+        try {
+            if (materialMode === 'link') {
+                // Keep link sharing on the normal authenticated Axios API client.
+                const response = await api.post('/teacher/materials', {
+                    title: materialTitle.trim(),
+                    description: materialDescription.trim(),
+                    external_url: materialLink.trim(),
+                }, {
+                    headers: { Accept: 'application/json' },
+                });
+
+                setNotice(response.data?.message || 'Lecture material link shared with students.');
+            } else {
+                const originalName = selectedMaterialFile.name || 'lecture-material.pdf';
+                const safeName = originalName.replace(/[^a-zA-Z0-9._-]/g, '_');
+                const extension = safeName.split('.').pop()?.toLowerCase();
+                const fallbackTypes = {
+                    pdf: 'application/pdf',
+                    doc: 'application/msword',
+                    docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    ppt: 'application/vnd.ms-powerpoint',
+                    pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+                };
+                const mimeType = selectedMaterialFile.mimeType || fallbackTypes[extension] || 'application/octet-stream';
+
+                if (typeof selectedMaterialFile.size === 'number' && selectedMaterialFile.size > MAX_MATERIAL_BYTES) {
+                    throw new Error('The file is larger than 25 MB. Please choose a smaller file.');
+                }
+
+                // Send the picker's file URI directly. React Native reads it natively,
+                // so no expo-file-system copy is needed. This avoids the Expo Go
+                // "Location ... isn't readable" error.
+                const formData = new FormData();
+                formData.append('title', materialTitle.trim());
+                formData.append('description', materialDescription.trim());
+                formData.append('file', {
+                    uri: selectedMaterialFile.uri,
+                    name: safeName,
+                    type: mimeType,
+                });
+
+                const uploadUrl = `${apiBase.replace(/\/+$/, '')}/teacher/materials`;
+                // Use XMLHttpRequest instead of fetch. Newer Expo SDKs replace the global
+                // fetch with a version that rejects React Native {uri, name, type} file
+                // parts ("Unsupported FormDataPart implementation"). XHR still supports them.
+                const uploadResult = await new Promise((resolve, reject) => {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', uploadUrl);
+                    xhr.setRequestHeader('Accept', 'application/json');
+                    xhr.setRequestHeader('Authorization', `Bearer ${token}`);
+                    // Do NOT set Content-Type; XHR adds the multipart boundary itself.
+                    xhr.timeout = 120000;
+                    xhr.onload = () => resolve({ status: xhr.status, body: xhr.responseText });
+                    xhr.onerror = () => reject(new Error('Network request failed. Check that the API address is reachable from this device.'));
+                    xhr.ontimeout = () => reject(new Error('The upload timed out. Please try again.'));
+                    xhr.send(formData);
+                });
+
+                let responseBody = {};
+                try {
+                    responseBody = JSON.parse(uploadResult.body || '{}');
+                } catch {
+                    responseBody = { message: uploadResult.body || '' };
+                }
+
+                if (uploadResult.status < 200 || uploadResult.status >= 300) {
+                    const firstValidationError = responseBody.errors
+                        ? Object.values(responseBody.errors).flat()[0]
+                        : null;
+                    throw new Error(
+                        firstValidationError
+                            ? String(firstValidationError)
+                            : (responseBody.message || `Upload failed with HTTP ${uploadResult.status}.`)
+                    );
+                }
+
+                setNotice(responseBody.message || 'Lecture material uploaded and shared with students.');
+            }
+
+            setMaterialTitle('');
+            setMaterialDescription('');
+            setMaterialLink('');
+            setSelectedMaterialFile(null);
+            await loadMaterials(false);
+        } catch (saveError) {
+            setMaterialsError(saveError?.message || messageFrom(saveError));
+        } finally {
+            setSavingMaterial(false);
+        }
+    };
+
+    const openMaterial = async (item) => {
+        const target = item.material_type === 'link' ? item.external_url : item.download_url;
+        if (!target) {
+            setMaterialsError('This material does not have a valid file or link.');
+            return;
+        }
+        try {
+            await Linking.openURL(target);
+        } catch {
+            setMaterialsError('Could not open this material. Please check the link or try again.');
+        }
+    };
+
+    const deleteMaterial = (item) => {
+        Alert.alert(
+            'Delete lecture material?',
+            'Students will no longer be able to access this material.',
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Delete', style: 'destructive', onPress: async () => {
+                        try {
+                            await api.delete(`/teacher/materials/${item.id}`);
+                            setMaterials((current) => current.filter((entry) => entry.id !== item.id));
+                            setNotice('Lecture material deleted successfully.');
+                        } catch (deleteError) {
+                            setMaterialsError(messageFrom(deleteError));
+                        }
+                    } },
+            ],
+        );
+    };
 
     const courseOptions = useMemo(() => (
         [...new Set(academicOptions.map((option) => option.course).filter(Boolean))]
@@ -660,6 +859,11 @@ export default function App() {
         setAdminEditingId(null);
         setAdminEditorVisible(false);
         setUnreadCount(0);
+        setMaterials([]);
+        setSelectedMaterialFile(null);
+        setMaterialTitle('');
+        setMaterialDescription('');
+        setMaterialLink('');
         setActiveQuiz(null);
         setAttemptSession(null);
         setDeadlineMs(null);
@@ -1035,7 +1239,7 @@ export default function App() {
 
     const deleteAdminRecord = (record) => {
         const recordId = record?.[adminMeta?.primary_key || 'id'];
-        const recordName = record?.name || record?.student_name || record?.teacher_name || record?.course_name || record?.degree_name || record?.batch_name || record?.subject_name || record?.exam_name || `record #${recordId}`;
+        const recordName = record?.name || record?.student_name || record?.teacher_name || record?.course_name || record?.degree_name || record?.batch_name || record?.subject_name || record?.exam_name || 'this record';
         Alert.alert(
             'Delete record?',
             `Are you sure you want to delete ${recordName}? This action cannot be undone.`,
@@ -1061,13 +1265,13 @@ export default function App() {
 
     const adminRecordTitle = (record) => {
         const combinedName = [record?.first_name, record?.last_name].filter(Boolean).join(' ').trim();
-        return record?.name || combinedName || record?.student_name || record?.teacher_name || record?.course_name || record?.degree_name || record?.batch_name || record?.subject_name || record?.exam_name || record?.title || record?.reg_no || record?.email || `Record #${record?.id ?? ''}`;
+        return record?.name || combinedName || record?.student_name || record?.teacher_name || record?.course_name || record?.degree_name || record?.batch_name || record?.subject_name || record?.exam_name || record?.title || record?.reg_no || record?.email || 'Untitled record';
     };
 
     const adminRecordSubtitle = (record) => {
         const fields = ['reg_no', 'email', 'phone', 'course_name', 'degree_name', 'batch_name', 'subject_code', 'course_code', 'degree_code', 'batch_code', 'admission_no', 'exam_date', 'created_at'];
         const value = fields.map((field) => record?.[field]).find((item) => item !== null && item !== undefined && String(item).trim() !== '');
-        return value === undefined ? `Record ID: ${record?.id ?? '—'}` : String(value);
+        return value === undefined ? '' : String(value);
     };
 
     const renderAdminManage = () => (
@@ -1118,9 +1322,10 @@ export default function App() {
                         <View style={styles.cardTopRow}>
                             <View style={styles.flexOne}>
                                 <Text style={styles.cardTitle}>{adminRecordTitle(record)}</Text>
-                                <Text style={styles.cardSubtitle}>{adminRecordSubtitle(record)}</Text>
+                                {!!adminRecordSubtitle(record) && (
+                                    <Text style={styles.cardSubtitle}>{adminRecordSubtitle(record)}</Text>
+                                )}
                             </View>
-                            <Text style={styles.adminRecordId}>#{record[adminMeta?.primary_key || 'id']}</Text>
                         </View>
                         <View style={styles.adminRecordActions}>
                             <Pressable onPress={() => openAdminEditor(record)} style={[styles.adminRecordButton, styles.adminEditButton]}>
@@ -1289,6 +1494,79 @@ export default function App() {
                     </View>
                 </>
             )}
+        </>
+    );
+
+    const renderMaterials = () => (
+        <>
+            <SectionTitle
+                title={role === 'teacher' ? 'Lecture Materials' : 'Learning Materials'}
+                subtitle={role === 'teacher' ? 'Share notes, presentations, documents, or online resources with students.' : 'Study files and learning links shared by your teachers.'}
+                action={<Pressable onPress={() => loadMaterials(true)} style={styles.refreshButton}><Text style={styles.refreshText}>↻ Refresh</Text></Pressable>}
+            />
+
+            {role === 'teacher' && (
+                <View style={styles.card}>
+                    <Text style={styles.formSectionTitle}>Share new material</Text>
+                    <Text style={styles.cardSubtitle}>Students can access materials shared by teachers from their Materials tab.</Text>
+                    <View style={styles.materialModeRow}>
+                        <Pressable onPress={() => { setMaterialMode('file'); setMaterialsError(''); }} style={[styles.materialModeOption, materialMode === 'file' && styles.materialModeOptionActive]}>
+                            <Text style={[styles.materialModeText, materialMode === 'file' && styles.materialModeTextActive]}>Upload file</Text>
+                        </Pressable>
+                        <Pressable onPress={() => { setMaterialMode('link'); setMaterialsError(''); }} style={[styles.materialModeOption, materialMode === 'link' && styles.materialModeOptionActive]}>
+                            <Text style={[styles.materialModeText, materialMode === 'link' && styles.materialModeTextActive]}>Share link</Text>
+                        </Pressable>
+                    </View>
+                    <Field label="Material title *" value={materialTitle} onChangeText={setMaterialTitle} placeholder="e.g. Week 01 - Introduction to Computing" autoCapitalize="sentences" />
+                    <Field label="Description" value={materialDescription} onChangeText={setMaterialDescription} placeholder="Add a short note for students (optional)" multiline autoCapitalize="sentences" />
+                    {materialMode === 'file' ? (
+                        <>
+                            <Pressable onPress={chooseMaterialFile} style={styles.materialChooseFile}>
+                                <Text style={styles.materialChooseFileTitle}>{selectedMaterialFile ? 'Change selected file' : '＋ Choose a document'}</Text>
+                                <Text style={styles.materialChooseFileHint}>PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx) · up to 25 MB</Text>
+                            </Pressable>
+                            {!!selectedMaterialFile && <Text style={styles.materialSelectedFile}>Selected: {selectedMaterialFile.name}</Text>}
+                        </>
+                    ) : (
+                        <Field label="Google Drive / online link *" value={materialLink} onChangeText={setMaterialLink} placeholder="https://drive.google.com/..." keyboardType="url" autoCapitalize="none" helperText="Set the Google Drive sharing permission to allow your students to view the file." />
+                    )}
+                    {!!materialsError && <Notice text={materialsError} />}
+                    <PrimaryButton title={savingMaterial ? 'Sharing…' : 'Share with students'} onPress={shareMaterial} loading={savingMaterial} disabled={savingMaterial} />
+                </View>
+            )}
+
+            <SectionTitle title={role === 'teacher' ? 'Shared by me' : 'Available materials'} subtitle={role === 'teacher' ? 'Materials you have uploaded or linked.' : 'Open a file or follow a shared resource link.'} />
+            {!!materialsError && role === 'student' && <Notice text={materialsError} />}
+            {materialsLoading ? (
+                <View style={styles.adminLoadingCard}><ActivityIndicator color={COLORS.blue} /><Text style={styles.loadingBarText}>Loading lecture materials…</Text></View>
+            ) : materials.length === 0 ? (
+                <EmptyState title="No lecture materials yet" body={role === 'teacher' ? 'Upload a document or share a Google Drive link to make learning materials available to students.' : 'Your teachers have not shared any learning materials yet.'} />
+            ) : materials.map((item) => (
+                <View key={String(item.id)} style={styles.card}>
+                    <View style={styles.cardTopRow}>
+                        <View style={styles.flexOne}>
+                            <Text style={styles.cardTitle}>{item.title}</Text>
+                            <Text style={styles.cardSubtitle}>{item.teacher_name || (role === 'teacher' ? 'You shared this material' : 'Teacher shared material')}</Text>
+                        </View>
+                        <View style={styles.materialTypePill}>
+                            <Text style={styles.materialTypePillText}>{item.material_type === 'link' ? 'LINK' : String(item.original_filename || 'FILE').split('.').pop().toUpperCase()}</Text>
+                        </View>
+                    </View>
+                    {!!item.description && <Text style={styles.cardDescription}>{item.description}</Text>}
+                    {!!item.original_filename && <Text style={styles.materialMetaText}>📄 {item.original_filename}</Text>}
+                    <View style={styles.materialActions}>
+                        <Pressable onPress={() => openMaterial(item)} style={styles.materialOpenButton}>
+                            <Text style={styles.materialOpenButtonText}>{item.material_type === 'link' ? 'Open shared link ↗' : 'Download / Open ↓'}</Text>
+                        </Pressable>
+                        {role === 'teacher' && (
+                            <Pressable onPress={() => deleteMaterial(item)} style={styles.materialDeleteButton}>
+                                <Text style={styles.materialDeleteButtonText}>Delete</Text>
+                            </Pressable>
+                        )}
+                    </View>
+                </View>
+            ))}
+            <Text style={styles.adminListFootnote}>Files are stored in the StudentManage server. External links open using the sharing permissions set by their owner.</Text>
         </>
     );
 
@@ -1554,6 +1832,7 @@ export default function App() {
                 {screen === 'adminManage' && role === 'admin' && renderAdminManage()}
                 {screen === 'adminModule' && role === 'admin' && renderAdminModule()}
                 {screen === 'quizzes' && renderQuizzes()}
+                {screen === 'materials' && (role === 'teacher' || role === 'student') && renderMaterials()}
                 {screen === 'results' && renderResults()}
                 {screen === 'notifications' && role === 'student' && (
                     <StudentNotificationsScreen
@@ -1654,6 +1933,7 @@ export default function App() {
                             <NavItem label="Home" icon="⌂" active={screen === 'home'} onPress={() => goTo('home')} />
                             <NavItem label="Quizzes" icon="▤" active={screen === 'quizzes'} onPress={() => goTo('quizzes')} />
                             <NavItem label="Results" icon="▥" active={screen === 'results'} onPress={() => goTo('results')} />
+                            <NavItem label="Materials" icon="▣" active={screen === 'materials'} onPress={() => goTo('materials')} />
                             {role === 'teacher' ? (
                                 <>
                                     <NavItem label="Create" icon="+" active={screen === 'create'} onPress={() => goTo('create')} />
@@ -1661,7 +1941,7 @@ export default function App() {
                                 </>
                             ) : (
                                 <>
-                                    <NavItem label="Alerts" icon="🔔" badge={unreadCount} active={screen === 'notifications'} onPress={() => goTo('notifications')} />
+                                    <NavItem label="Alerts" icon="♢" badge={unreadCount} active={screen === 'notifications'} onPress={() => goTo('notifications')} />
                                     <NavItem label="Profile" icon="◉" active={screen === 'profile'} onPress={() => goTo('profile')} />
                                 </>
                             )}
@@ -1835,7 +2115,6 @@ const styles = StyleSheet.create({
     adminSearchButton: { backgroundColor: '#EEF1FB', borderWidth: 1, borderColor: '#DCE3F2' },
     adminAddButton: { flex: 1, backgroundColor: COLORS.blue },
     adminToolbarButtonText: { color: COLORS.ink, fontSize: 11, fontWeight: '900' },
-    adminRecordId: { color: COLORS.muted, fontSize: 10, fontWeight: '800' },
     adminRecordActions: { flexDirection: 'row', gap: 9, borderTopWidth: 1, borderTopColor: '#EEF1F7', paddingTop: 11, marginTop: 3 },
     adminRecordButton: { flex: 1, minHeight: 36, alignItems: 'center', justifyContent: 'center', borderRadius: 9, borderWidth: 1 },
     adminEditButton: { backgroundColor: '#F0F1FF', borderColor: '#DDE0FF' },
@@ -1843,6 +2122,23 @@ const styles = StyleSheet.create({
     adminEditButtonText: { color: COLORS.blue, fontSize: 11, fontWeight: '900' },
     adminDeleteButtonText: { color: COLORS.red, fontSize: 11, fontWeight: '900' },
     adminListFootnote: { color: COLORS.muted, fontSize: 10, textAlign: 'center', marginVertical: 8 },
+    materialModeRow: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 15 },
+    materialModeOption: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, borderWidth: 1, borderColor: COLORS.line, backgroundColor: '#FAFBFE' },
+    materialModeOptionActive: { borderColor: '#B9BFFF', backgroundColor: '#F0F1FF' },
+    materialModeText: { color: COLORS.muted, fontSize: 11, fontWeight: '800' },
+    materialModeTextActive: { color: COLORS.blue },
+    materialChooseFile: { borderWidth: 1, borderStyle: 'dashed', borderColor: '#B9BFFF', backgroundColor: '#F7F8FF', borderRadius: 13, padding: 15, marginBottom: 8 },
+    materialChooseFileTitle: { color: COLORS.blue, fontSize: 12, fontWeight: '900' },
+    materialChooseFileHint: { color: COLORS.muted, fontSize: 10, lineHeight: 15, marginTop: 5 },
+    materialSelectedFile: { color: COLORS.green, fontSize: 10, fontWeight: '800', lineHeight: 15, marginBottom: 9 },
+    materialTypePill: { backgroundColor: '#EEF1FF', borderRadius: 9, paddingHorizontal: 9, paddingVertical: 6 },
+    materialTypePillText: { color: COLORS.blue, fontSize: 9, fontWeight: '900' },
+    materialMetaText: { color: COLORS.muted, fontSize: 10, marginBottom: 10 },
+    materialActions: { flexDirection: 'row', gap: 9, marginTop: 7 },
+    materialOpenButton: { flex: 1, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: '#F0F1FF', borderWidth: 1, borderColor: '#DDE0FF' },
+    materialOpenButtonText: { color: COLORS.blue, fontSize: 11, fontWeight: '900' },
+    materialDeleteButton: { minWidth: 82, minHeight: 40, alignItems: 'center', justifyContent: 'center', borderRadius: 10, backgroundColor: COLORS.redBg, borderWidth: 1, borderColor: '#F1C8CE' },
+    materialDeleteButtonText: { color: COLORS.red, fontSize: 11, fontWeight: '900' },
     adminLoadingCard: { minHeight: 100, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: COLORS.white, borderRadius: 16, borderWidth: 1, borderColor: COLORS.line, marginBottom: 12 },
     adminEditorRoot: { flex: 1, backgroundColor: COLORS.background, paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 },
     adminEditorHeader: { minHeight: 70, paddingHorizontal: 18, paddingVertical: 12, backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.line, flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -1870,16 +2166,71 @@ const styles = StyleSheet.create({
     emptyIconText: { color: COLORS.blue, fontSize: 19, fontWeight: '900' },
     emptyTitle: { color: COLORS.ink, fontSize: 15, fontWeight: '900', marginBottom: 6 },
     emptyBody: { color: COLORS.muted, fontSize: 11, lineHeight: 17 },
-    bottomNav: { minHeight: 66, borderTopWidth: 1, borderTopColor: COLORS.line, backgroundColor: COLORS.white, flexDirection: 'row', justifyContent: 'space-around', paddingHorizontal: 4, paddingTop: 7, paddingBottom: Platform.OS === 'ios' ? 16 : 7 },
-    navItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 3 },
-    navIconWrap: { minWidth: 35, minHeight: 27, paddingHorizontal: 7, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-    navIconWrapActive: { backgroundColor: '#F0F1FF' },
-    navIcon: { fontSize: 19, color: '#8B97AD', fontWeight: '700' },
-    navIconActive: { color: COLORS.blue },
-    navBadge: { position: 'absolute', top: -4, right: -2, minWidth: 16, height: 16, paddingHorizontal: 3, borderRadius: 8, backgroundColor: COLORS.red, alignItems: 'center', justifyContent: 'center' },
+    bottomNav: {
+        minHeight: 74,
+        borderTopWidth: 1,
+        borderTopColor: '#E8ECF5',
+        backgroundColor: COLORS.white,
+        flexDirection: 'row',
+        justifyContent: 'space-around',
+        alignItems: 'center',
+        paddingHorizontal: 5,
+        paddingTop: 7,
+        paddingBottom: Platform.OS === 'ios' ? 16 : 7,
+        elevation: 12,
+        shadowColor: '#172554',
+        shadowOffset: { width: 0, height: -4 },
+        shadowOpacity: 0.06,
+        shadowRadius: 10,
+    },
+    navItem: {
+        flex: 1,
+        minWidth: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        paddingVertical: 2,
+    },
+    navIconWrap: {
+        width: 35,
+        height: 32,
+        borderRadius: 11,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'transparent',
+    },
+    navIconWrapActive: {
+        backgroundColor: COLORS.blue,
+        shadowColor: COLORS.blue,
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.22,
+        shadowRadius: 5,
+        elevation: 3,
+    },
+    navIcon: {
+        fontSize: 18,
+        color: '#8A95A9',
+        fontWeight: '800',
+        textAlign: 'center',
+    },
+    navIconActive: { color: COLORS.white },
+    navBadge: {
+        position: 'absolute',
+        top: -4,
+        right: -3,
+        minWidth: 16,
+        height: 16,
+        paddingHorizontal: 3,
+        borderRadius: 8,
+        backgroundColor: COLORS.red,
+        borderWidth: 1.5,
+        borderColor: COLORS.white,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     navBadgeText: { color: COLORS.white, fontSize: 8, lineHeight: 10, fontWeight: '900' },
-    navLabel: { color: '#8B97AD', fontSize: 9, fontWeight: '700' },
-    navLabelActive: { color: COLORS.blue, fontWeight: '900' },
+    navLabel: { color: '#8A95A9', fontSize: 9, fontWeight: '700' },
+    navLabelActive: { color: '#4657E8', fontWeight: '900' },
     twoFields: { flexDirection: 'row', gap: 10 },
     halfField: { flex: 1 },
     removeText: { color: COLORS.red, fontWeight: '800', fontSize: 11 },
