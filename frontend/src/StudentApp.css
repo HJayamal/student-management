@@ -501,3 +501,45 @@ button.student-nav-item:focus-visible {
         flex: 1 1 120px;
     }
 }
+
+
+/* Learning Materials view - additive styles; existing student theme is unchanged. */
+.student-materials-section { margin-top: 4px; min-width: 0; }
+.student-materials-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 17px; padding: 20px 22px; border: 1px solid #e5eaf4; border-radius: 18px; background: #fff; box-shadow: 0 6px 20px rgba(29, 40, 77, .035); }
+.student-materials-heading-copy { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.student-materials-heading-copy h2 { margin: 0 0 5px; color: #202a46; font-size: 18px; letter-spacing: -.3px; }
+.student-materials-heading-copy p { margin: 0; color: #8a96aa; font-size: 12px; line-height: 1.6; }
+.student-materials-heading-icon { display: grid; flex: 0 0 auto; place-items: center; width: 44px; height: 44px; border-radius: 13px; color: #5965e9; background: #f0f1ff; font-size: 22px; }
+.student-materials-refresh { flex: 0 0 auto; padding: 9px 13px; border: 1px solid #dedfff; border-radius: 10px; color: #5962df; background: #f4f4ff; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.student-materials-refresh:hover:not(:disabled) { background: #e9eaff; }
+.student-materials-refresh:disabled { opacity: .65; cursor: wait; }
+.student-materials-message, .student-materials-error, .student-materials-empty { margin-top: 14px; padding: 22px; border-radius: 15px; font-size: 12px; line-height: 1.7; }
+.student-materials-message { color: #626f89; border: 1px solid #e5eaf4; background: #fff; }
+.student-materials-error { color: #a52b37; border: 1px solid #f3c9ce; background: #fff5f5; }
+.student-materials-empty { display: grid; justify-items: start; border: 1px solid #e5eaf4; background: #fff; color: #76829a; }
+.student-materials-empty-icon { display: grid; place-items: center; width: 40px; height: 40px; margin-bottom: 12px; border-radius: 12px; color: #6873e8; background: #f0f1ff; font-size: 19px; font-weight: 800; }
+.student-materials-empty h3 { margin: 0 0 7px; color: #26314d; font-size: 15px; }
+.student-materials-empty p { max-width: 680px; margin: 0; }
+.student-materials-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin-top: 16px; }
+.student-material-card { display: flex; min-width: 0; flex-direction: column; padding: 21px; border: 1px solid #e5eaf4; border-radius: 18px; background: #fff; box-shadow: 0 6px 20px rgba(29, 40, 77, .035); }
+.student-material-card-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.student-material-file-icon { display: grid; place-items: center; width: 42px; height: 42px; border-radius: 13px; color: #5965e9; background: #f0f1ff; font-size: 21px; font-weight: 800; }
+.student-material-type { flex: 0 0 auto; padding: 7px 10px; border-radius: 999px; font-size: 10px; font-weight: 800; }
+.student-material-type.file { color: #4e5bd1; background: #eff0ff; }
+.student-material-type.link { color: #13764f; background: #e3f8ee; }
+.student-material-card h3 { overflow-wrap: anywhere; margin: 16px 0 5px; color: #26314d; font-size: 16px; line-height: 1.4; }
+.student-material-teacher { margin: 0; color: #6e7b94; font-size: 11px; }
+.student-material-description { margin: 13px 0 0; color: #6e7b94; font-size: 12px; line-height: 1.65; white-space: pre-wrap; overflow-wrap: anywhere; }
+.student-material-filename { margin: 13px 0 0; color: #78849b; font-size: 11px; overflow-wrap: anywhere; }
+.student-material-card-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: auto; padding-top: 18px; }
+.student-material-card-footer > span { color: #8a96aa; font-size: 10px; }
+.student-material-open-button { display: inline-flex; align-items: center; justify-content: center; padding: 9px 12px; border-radius: 10px; color: #fff; background: linear-gradient(110deg, #5969f6, #7658e9); font-size: 10px; font-weight: 800; text-decoration: none; white-space: nowrap; }
+.student-material-open-button:hover { box-shadow: 0 6px 14px rgba(89, 105, 246, .2); }
+.student-material-unavailable { color: #a52b37 !important; }
+@media (max-width: 760px) {
+    .student-materials-header { align-items: flex-start; flex-wrap: wrap; padding: 18px; }
+    .student-materials-heading-copy { flex: 1 1 calc(100% - 65px); }
+    .student-materials-refresh { margin-left: 58px; }
+    .student-materials-grid { grid-template-columns: 1fr; }
+    .student-material-card-footer { align-items: flex-start; flex-direction: column; }
+}

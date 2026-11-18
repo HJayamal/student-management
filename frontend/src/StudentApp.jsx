@@ -34,14 +34,18 @@ function StudentApp() {
     const selectedAnswersRef = useRef({});
     // Queue answer writes in order so rapid clicks cannot overwrite newer answers.
     const answerSaveQueueRef = useRef(Promise.resolve());
-    const [activeNavItem, setActiveNavItem] = useState(() =>
-        window.location.pathname.replace(/\/+$/, "") === "/student/results"
-            ? "results"
-            : "dashboard"
-    );
+    const [activeNavItem, setActiveNavItem] = useState(() => {
+        const currentPath = window.location.pathname.replace(/\/+$/, "");
+        if (currentPath === "/student/results") return "results";
+        if (currentPath === "/student/materials") return "materials";
+        return "dashboard";
+    });
     const [results, setResults] = useState([]);
     const [loadingResults, setLoadingResults] = useState(false);
     const [resultsError, setResultsError] = useState("");
+    const [materials, setMaterials] = useState([]);
+    const [loadingMaterials, setLoadingMaterials] = useState(false);
+    const [materialsError, setMaterialsError] = useState("");
 
     const getQuizSessionKey = (quizId, suffix) =>
         `quizspace:student:${student?.id ?? "current"}:quiz:${quizId}:${suffix}`;
@@ -100,6 +104,45 @@ function StudentApp() {
         await loadStudentResults();
         window.scrollTo({ top: 0, behavior: "smooth" });
     };
+
+    const loadStudentMaterials = useCallback(async () => {
+        if (!localStorage.getItem("student_token")) {
+            setMaterials([]);
+            setMaterialsError("");
+            return;
+        }
+
+        setLoadingMaterials(true);
+        setMaterialsError("");
+
+        try {
+            const response = await studentApi.get("/student/materials");
+            const data = response.data || {};
+            setMaterials(Array.isArray(data.materials) ? data.materials : []);
+        } catch (err) {
+            setMaterials([]);
+            setMaterialsError(
+                err.response?.data?.message ||
+                "Unable to load learning materials. Please refresh and try again."
+            );
+        } finally {
+            setLoadingMaterials(false);
+        }
+    }, []);
+
+    const handleShowMaterials = () => {
+        if (window.location.pathname.replace(/\/+$/, "") !== "/student/materials") {
+            window.history.pushState({}, "", "/student/materials");
+        }
+        setActiveNavItem("materials");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+    };
+
+    useEffect(() => {
+        if (activeNavItem === "materials" && student) {
+            void loadStudentMaterials();
+        }
+    }, [activeNavItem, student, loadStudentMaterials]);
 
     const loadStudentQuizzes = useCallback(async () => {
         if (!localStorage.getItem("student_token")) {
@@ -429,10 +472,14 @@ function StudentApp() {
 
     useEffect(() => {
         const handleBrowserNavigation = () => {
-            const isResultsPage =
-                window.location.pathname.replace(/\/+$/, "") === "/student/results";
-            setActiveNavItem(isResultsPage ? "results" : "dashboard");
-            if (isResultsPage) {
+            const currentPath = window.location.pathname.replace(/\/+$/, "");
+            const nextPage = currentPath === "/student/results"
+                ? "results"
+                : currentPath === "/student/materials"
+                    ? "materials"
+                    : "dashboard";
+            setActiveNavItem(nextPage);
+            if (nextPage === "results") {
                 loadStudentResults();
             }
         };
@@ -502,6 +549,9 @@ function StudentApp() {
             setQuizNotice("");
             setResults([]);
             setResultsError("");
+            setMaterials([]);
+            setMaterialsError("");
+            setLoadingMaterials(false);
             setActiveQuiz(null);
             setActiveQuestions([]);
             selectedAnswersRef.current = {};
@@ -553,6 +603,9 @@ function StudentApp() {
             setQuizNotice("");
             setResults([]);
             setResultsError("");
+            setMaterials([]);
+            setMaterialsError("");
+            setLoadingMaterials(false);
             setActiveQuiz(null);
             setActiveQuestions([]);
             selectedAnswersRef.current = {};
@@ -696,6 +749,13 @@ function StudentApp() {
                 >
                     <span>▤</span> My Results
                 </button>
+                <button
+                    type="button"
+                    className={`student-nav-item ${activeNavItem === "materials" ? "active" : ""}`}
+                    onClick={handleShowMaterials}
+                >
+                    <span>▧</span> Learning Materials
+                </button>
                 <div className="student-sidebar-bottom">
                     <div className="student-sidebar-profile">
                         <div className="student-avatar small">{initials || "S"}</div>
@@ -712,12 +772,16 @@ function StudentApp() {
                         <h1>
                             {activeNavItem === "results"
                                 ? "My Results"
-                                : `Welcome back, ${student.name?.split(" ")[0] || "Student"}!`}
+                                : activeNavItem === "materials"
+                                    ? "Learning Materials"
+                                    : `Welcome back, ${student.name?.split(" ")[0] || "Student"}!`}
                         </h1>
                         <p>
                             {activeNavItem === "results"
                                 ? "Review your submitted quizzes, scores, and percentages."
-                                : "Your academic details and quiz workspace at a glance."}
+                                : activeNavItem === "materials"
+                                    ? "Lecture documents and learning links shared by your teachers."
+                                    : "Your academic details and quiz workspace at a glance."}
                         </p>
                     </div>
                     <div className="student-header-profile">
@@ -1178,6 +1242,103 @@ function StudentApp() {
                             )}
                         </section>
                     </>
+                )}
+
+                {activeNavItem === "materials" && (
+                    <section className="student-materials-section" aria-labelledby="student-materials-heading">
+                        <div className="student-materials-header">
+                            <div className="student-materials-heading-copy">
+                                <div className="student-materials-heading-icon" aria-hidden="true">▧</div>
+                                <div>
+                                    <h2 id="student-materials-heading">Learning Materials</h2>
+                                    <p>Documents and online learning links shared by your teachers.</p>
+                                </div>
+                            </div>
+                            <button
+                                type="button"
+                                className="student-materials-refresh"
+                                onClick={loadStudentMaterials}
+                                disabled={loadingMaterials}
+                            >
+                                {loadingMaterials ? "Loading..." : "↻ Refresh"}
+                            </button>
+                        </div>
+
+                        {loadingMaterials && (
+                            <div className="student-materials-message" role="status">
+                                Loading learning materials...
+                            </div>
+                        )}
+
+                        {!loadingMaterials && materialsError && (
+                            <div className="student-materials-error" role="alert">
+                                {materialsError}
+                            </div>
+                        )}
+
+                        {!loadingMaterials && !materialsError && materials.length === 0 && (
+                            <div className="student-materials-empty">
+                                <div className="student-materials-empty-icon" aria-hidden="true">▧</div>
+                                <h3>No learning materials yet</h3>
+                                <p>Your teachers have not shared any lecture documents or links yet. Please check again later.</p>
+                            </div>
+                        )}
+
+                        {!loadingMaterials && !materialsError && materials.length > 0 && (
+                            <div className="student-materials-grid">
+                                {materials.map((item) => {
+                                    const isLink = item.material_type === "link";
+                                    const fileName = item.original_filename || "Lecture document";
+                                    const fileExtension = fileName.includes(".")
+                                        ? fileName.split(".").pop().toUpperCase()
+                                        : "FILE";
+                                    const destination = isLink ? item.external_url : item.download_url;
+
+                                    return (
+                                        <article className="student-material-card" key={item.id}>
+                                            <div className="student-material-card-top">
+                                                <div className="student-material-file-icon" aria-hidden="true">
+                                                    {isLink ? "↗" : "▤"}
+                                                </div>
+                                                <span className={`student-material-type ${isLink ? "link" : "file"}`}>
+                                                    {isLink ? "LINK" : fileExtension}
+                                                </span>
+                                            </div>
+                                            <h3>{item.title || "Learning material"}</h3>
+                                            <p className="student-material-teacher">
+                                                Shared by {item.teacher_name || "your teacher"}
+                                            </p>
+                                            {item.description && (
+                                                <p className="student-material-description">{item.description}</p>
+                                            )}
+                                            {!isLink && (
+                                                <p className="student-material-filename">📄 {fileName}</p>
+                                            )}
+                                            <div className="student-material-card-footer">
+                                                <span>
+                                                    {item.created_at
+                                                        ? new Date(String(item.created_at).replace(" ", "T")).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
+                                                        : "Shared material"}
+                                                </span>
+                                                {destination ? (
+                                                    <a
+                                                        className="student-material-open-button"
+                                                        href={destination}
+                                                        target="_blank"
+                                                        rel="noopener noreferrer"
+                                                    >
+                                                        {isLink ? "Open link ↗" : "Download file ↓"}
+                                                    </a>
+                                                ) : (
+                                                    <span className="student-material-unavailable">Link unavailable</span>
+                                                )}
+                                            </div>
+                                        </article>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </section>
                 )}
 
                 <footer className="student-dashboard-footer">StudentManage Student Portal · Powered by Laravel</footer>

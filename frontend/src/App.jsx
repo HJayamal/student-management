@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import api from "./api";
 import "./App.css";
 
@@ -80,6 +80,20 @@ const formatSubmissionDateTime = (value) => {
     });
 };
 
+const formatMaterialFileSize = (bytes) => {
+    const size = Number(bytes || 0);
+    if (!size) return "";
+    if (size < 1024 * 1024) return `${(size / 1024).toFixed(0)} KB`;
+    return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const formatMaterialDateTime = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+};
+
 function App() {
     const [teacher, setTeacher] = useState(() => {
         try {
@@ -100,6 +114,20 @@ function App() {
     const [results, setResults] = useState([]);
     const [resultsLoading, setResultsLoading] = useState(false);
     const [selectedResult, setSelectedResult] = useState(null);
+
+    // Lecture materials shared by this teacher.
+    const [materials, setMaterials] = useState([]);
+    const [materialsLoading, setMaterialsLoading] = useState(false);
+    const [materialsError, setMaterialsError] = useState("");
+    const [materialMode, setMaterialMode] = useState("file");
+    const [materialTitle, setMaterialTitle] = useState("");
+    const [materialDescription, setMaterialDescription] = useState("");
+    const [materialLink, setMaterialLink] = useState("");
+    const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
+    const [materialFileInputKey, setMaterialFileInputKey] = useState(0);
+    const [savingMaterial, setSavingMaterial] = useState(false);
+    const [deletingMaterialId, setDeletingMaterialId] = useState(null);
+
     const [subjects, setSubjects] = useState([]);
     const [subjectsLoading, setSubjectsLoading] = useState(false);
     const [subjectsError, setSubjectsError] = useState("");
@@ -542,6 +570,154 @@ function App() {
         }
     };
 
+    const loadMaterials = useCallback(async (showSpinner = true) => {
+        if (showSpinner) setMaterialsLoading(true);
+        setMaterialsError("");
+
+        try {
+            const response = await api.get("/teacher/materials");
+            setMaterials(Array.isArray(response.data?.materials) ? response.data.materials : []);
+        } catch (err) {
+            setMaterials([]);
+            setMaterialsError(
+                err.response?.data?.message ||
+                "Unable to load lecture materials. Please try again."
+            );
+        } finally {
+            if (showSpinner) setMaterialsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (view !== "materials" || !teacher) return;
+        loadMaterials(true);
+    }, [view, teacher?.id, loadMaterials]);
+
+    const handleShareMaterial = async (event) => {
+        event.preventDefault();
+        setMaterialsError("");
+        setError("");
+
+        if (!materialTitle.trim()) {
+            setMaterialsError("Enter a title for this lecture material.");
+            return;
+        }
+
+        if (materialTitle.trim().length > 180) {
+            setMaterialsError("The title cannot exceed 180 characters.");
+            return;
+        }
+
+        if (materialDescription.length > 3000) {
+            setMaterialsError("The description cannot exceed 3000 characters.");
+            return;
+        }
+
+        if (materialMode === "file" && !selectedMaterialFile) {
+            setMaterialsError("Choose a PDF, Word, or PowerPoint document.");
+            return;
+        }
+
+        if (materialMode === "file" && selectedMaterialFile) {
+            const allowedExtensions = ["pdf", "doc", "docx", "ppt", "pptx"];
+            const extension = selectedMaterialFile.name.split(".").pop()?.toLowerCase();
+
+            if (!allowedExtensions.includes(extension)) {
+                setMaterialsError("Only PDF, DOC, DOCX, PPT, and PPTX files are allowed.");
+                return;
+            }
+
+            if (selectedMaterialFile.size > 25 * 1024 * 1024) {
+                setMaterialsError("The selected file is larger than 25 MB.");
+                return;
+            }
+        }
+
+        if (materialMode === "link" && !/^https?:\/\//i.test(materialLink.trim())) {
+            setMaterialsError("Enter a valid link starting with https:// or http://.");
+            return;
+        }
+
+        setSavingMaterial(true);
+
+        try {
+            let response;
+
+            if (materialMode === "file") {
+                const formData = new FormData();
+                formData.append("title", materialTitle.trim());
+                formData.append("description", materialDescription.trim());
+                formData.append("file", selectedMaterialFile);
+
+                // Do not manually set the multipart boundary; the browser/Axios adds it.
+                response = await api.post("/teacher/materials", formData, {
+                    headers: { Accept: "application/json", "Content-Type": "multipart/form-data" },
+                });
+            } else {
+                response = await api.post("/teacher/materials", {
+                    title: materialTitle.trim(),
+                    description: materialDescription.trim(),
+                    external_url: materialLink.trim(),
+                }, {
+                    headers: { Accept: "application/json" },
+                });
+            }
+
+            setNotice(response.data?.message || "Lecture material shared with students successfully.");
+            setMaterialTitle("");
+            setMaterialDescription("");
+            setMaterialLink("");
+            setSelectedMaterialFile(null);
+            setMaterialFileInputKey((current) => current + 1);
+            await loadMaterials(false);
+        } catch (err) {
+            const validationMessage = err.response?.data?.errors
+                ? Object.values(err.response.data.errors).flat()[0]
+                : null;
+            setMaterialsError(
+                validationMessage ||
+                err.response?.data?.message ||
+                err.message ||
+                "Unable to share this lecture material. Please try again."
+            );
+        } finally {
+            setSavingMaterial(false);
+        }
+    };
+
+    const handleDeleteMaterial = async (material) => {
+        if (!window.confirm(`Delete "${material.title}"? This cannot be undone.`)) return;
+
+        setMaterialsError("");
+        setDeletingMaterialId(material.id);
+
+        try {
+            const response = await api.delete(`/teacher/materials/${material.id}`);
+            setMaterials((current) => current.filter((item) => item.id !== material.id));
+            setNotice(response.data?.message || "Lecture material deleted successfully.");
+        } catch (err) {
+            setMaterialsError(
+                err.response?.data?.message ||
+                "Unable to delete this material. Please try again."
+            );
+        } finally {
+            setDeletingMaterialId(null);
+        }
+    };
+
+    const handleOpenMaterial = (material) => {
+        const target = material.material_type === "link"
+            ? material.external_url
+            : material.download_url;
+
+        if (!target) {
+            setMaterialsError("This material does not have an available link.");
+            return;
+        }
+
+        window.open(target, "_blank", "noopener,noreferrer");
+    };
+
     const handleLogout = async () => {
         try {
             // Revoke the current token on the Laravel backend
@@ -557,6 +733,12 @@ function App() {
             setQuizzes([]);
             setResults([]);
             setSelectedResult(null);
+            setMaterials([]);
+            setMaterialsError("");
+            setMaterialTitle("");
+            setMaterialDescription("");
+            setMaterialLink("");
+            setSelectedMaterialFile(null);
             setSubjects([]);
             setSubjectsError("");
             setSubjectsLoading(false);
@@ -787,6 +969,18 @@ function App() {
                 </button>
 
                 <button
+                    className={`nav-item ${view === "materials" ? "active" : ""}`}
+                    onClick={() => {
+                        setView("materials");
+                        setError("");
+                        setNotice("");
+                        setMaterialsError("");
+                    }}
+                >
+                    <span>▤</span> Lecture Materials
+                </button>
+
+                <button
                     className={`nav-item ${view === "create" ? "active" : ""}`}
                     onClick={() => {
                         setQuizForm(initialQuiz());
@@ -833,7 +1027,9 @@ function App() {
                                             ? "Scheduled Quizzes"
                                             : view === "results"
                                                 ? "Student Results"
-                                                : "My Quizzes"}
+                                                : view === "materials"
+                                                    ? "Lecture Materials"
+                                                    : "My Quizzes"}
                         </h1>
                         <p className="header-subtitle">
                             {view === "dashboard"
@@ -848,7 +1044,9 @@ function App() {
                                             ? "Manage quizzes that are waiting for their availability date and time."
                                             : view === "results"
                                                 ? "Review student submissions for quizzes you created."
-                                                : "Manage your quizzes and publication status."}
+                                                : view === "materials"
+                                                    ? "Upload lecture notes or share learning links with your students."
+                                                    : "Manage your quizzes and publication status."}
                         </p>
                     </div>
 
@@ -907,7 +1105,193 @@ function App() {
                     </section>
                 )}
 
-                {view === "create" ? (
+                {view === "materials" ? (
+                    <div className="materials-page">
+                        <section className="materials-panel">
+                            <div className="materials-panel-heading">
+                                <div>
+                                    <h2>Share learning materials</h2>
+                                    <p>Upload lecture slides or share a Google Drive / online resource link.</p>
+                                </div>
+                                <span className="materials-heading-icon">▤</span>
+                            </div>
+
+                            <form className="materials-form" onSubmit={handleShareMaterial}>
+                                <div className="materials-mode-switch" role="group" aria-label="Material type">
+                                    <button
+                                        type="button"
+                                        className={`materials-mode-button ${materialMode === "file" ? "active" : ""}`}
+                                        onClick={() => {
+                                            setMaterialMode("file");
+                                            setMaterialsError("");
+                                        }}
+                                    >
+                                        <span>↑</span> Upload a file
+                                    </button>
+                                    <button
+                                        type="button"
+                                        className={`materials-mode-button ${materialMode === "link" ? "active" : ""}`}
+                                        onClick={() => {
+                                            setMaterialMode("link");
+                                            setMaterialsError("");
+                                        }}
+                                    >
+                                        <span>↗</span> Share a link
+                                    </button>
+                                </div>
+
+                                <div className="materials-field">
+                                    <label htmlFor="material-title">Material title *</label>
+                                    <input
+                                        id="material-title"
+                                        type="text"
+                                        value={materialTitle}
+                                        onChange={(event) => setMaterialTitle(event.target.value)}
+                                        placeholder="e.g. Week 01 - Introduction to Computing"
+                                        maxLength={180}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="materials-field">
+                                    <label htmlFor="material-description">Description <span>(optional)</span></label>
+                                    <textarea
+                                        id="material-description"
+                                        value={materialDescription}
+                                        onChange={(event) => setMaterialDescription(event.target.value)}
+                                        placeholder="Add a short note for your students"
+                                        rows={3}
+                                        maxLength={3000}
+                                    />
+                                </div>
+
+                                {materialMode === "file" ? (
+                                    <div className="materials-field">
+                                        <label htmlFor="material-file">Lecture document *</label>
+                                        <input
+                                            key={materialFileInputKey}
+                                            id="material-file"
+                                            className="materials-file-input"
+                                            type="file"
+                                            accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                            onChange={(event) => {
+                                                setSelectedMaterialFile(event.target.files?.[0] || null);
+                                                setMaterialsError("");
+                                            }}
+                                        />
+                                        <p className="materials-help-text">PDF, Word (DOC/DOCX), or PowerPoint (PPT/PPTX). Maximum file size: 25 MB.</p>
+                                        {selectedMaterialFile && (
+                                            <div className="materials-selected-file">
+                                                <span className="materials-file-symbol">PDF</span>
+                                                <div>
+                                                    <strong>{selectedMaterialFile.name}</strong>
+                                                    <span>{formatMaterialFileSize(selectedMaterialFile.size)}</span>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                ) : (
+                                    <div className="materials-field">
+                                        <label htmlFor="material-link">Google Drive / online link *</label>
+                                        <input
+                                            id="material-link"
+                                            type="url"
+                                            value={materialLink}
+                                            onChange={(event) => setMaterialLink(event.target.value)}
+                                            placeholder="https://drive.google.com/..."
+                                            autoComplete="url"
+                                            required
+                                        />
+                                        <p className="materials-help-text">Set the Google Drive sharing permission so your students can view the file.</p>
+                                    </div>
+                                )}
+
+                                {materialsError && (
+                                    <div className="materials-feedback materials-feedback-error" role="alert">
+                                        {materialsError}
+                                    </div>
+                                )}
+
+                                <div className="materials-form-actions">
+                                    <button type="submit" className="materials-submit-button" disabled={savingMaterial}>
+                                        {savingMaterial ? "Sharing..." : "Share with students →"}
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+
+                        <section className="materials-panel">
+                            <div className="materials-panel-heading materials-list-heading">
+                                <div>
+                                    <h2>Shared by me</h2>
+                                    <p>Documents and links you have shared with students.</p>
+                                </div>
+                                <button
+                                    type="button"
+                                    className="materials-refresh-button"
+                                    onClick={() => loadMaterials(true)}
+                                    disabled={materialsLoading}
+                                >
+                                    {materialsLoading ? "Refreshing..." : "↻ Refresh"}
+                                </button>
+                            </div>
+
+                            {materialsLoading ? (
+                                <div className="materials-empty-state">Loading lecture materials...</div>
+                            ) : materials.length === 0 ? (
+                                <div className="materials-empty-state">
+                                    <span className="materials-empty-icon">▤</span>
+                                    <h3>No materials shared yet</h3>
+                                    <p>Upload your first lecture document or share an online resource link.</p>
+                                </div>
+                            ) : (
+                                <div className="materials-list">
+                                    {materials.map((material) => (
+                                        <article className="materials-item" key={material.id}>
+                                            <div className="materials-item-main">
+                                                <div className="materials-item-icon">
+                                                    {material.material_type === "link" ? "↗" : "▤"}
+                                                </div>
+                                                <div className="materials-item-copy">
+                                                    <h3>{material.title}</h3>
+                                                    <p>{material.description || "No description provided."}</p>
+                                                    <div className="materials-item-meta">
+                                                        <span>{material.material_type === "link" ? "Online link" : (material.original_filename || "Uploaded file")}</span>
+                                                        {material.material_type === "file" && material.file_size ? (
+                                                            <span>{formatMaterialFileSize(material.file_size)}</span>
+                                                        ) : null}
+                                                        {material.created_at ? <span>{formatMaterialDateTime(material.created_at)}</span> : null}
+                                                    </div>
+                                                </div>
+                                                <span className={`materials-type-pill ${material.material_type === "link" ? "link" : "file"}`}>
+                                                    {material.material_type === "link" ? "LINK" : "FILE"}
+                                                </span>
+                                            </div>
+                                            <div className="materials-item-actions">
+                                                <button
+                                                    type="button"
+                                                    className="materials-open-button"
+                                                    onClick={() => handleOpenMaterial(material)}
+                                                >
+                                                    {material.material_type === "link" ? "Open shared link ↗" : "Download / Open ↓"}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    className="materials-delete-button"
+                                                    onClick={() => handleDeleteMaterial(material)}
+                                                    disabled={deletingMaterialId === material.id}
+                                                >
+                                                    {deletingMaterialId === material.id ? "Deleting..." : "Delete"}
+                                                </button>
+                                            </div>
+                                        </article>
+                                    ))}
+                                </div>
+                            )}
+                            <p className="materials-footnote">Uploaded files are stored securely by StudentManage. Shared download links expire after 12 hours. External link permissions are managed by the link owner.</p>
+                        </section>
+                    </div>
+                ) : view === "create" ? (
                     <section className="content-card quiz-builder">
                         <div className="content-card-header">
                             <div>
@@ -1682,4 +2066,3 @@ function App() {
 }
 
 export default App;
-
