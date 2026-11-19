@@ -365,7 +365,6 @@ export default function App() {
     const [materials, setMaterials] = useState([]);
     const [materialsLoading, setMaterialsLoading] = useState(false);
     const [materialsError, setMaterialsError] = useState('');
-    const [materialMode, setMaterialMode] = useState('file');
     const [materialTitle, setMaterialTitle] = useState('');
     const [materialDescription, setMaterialDescription] = useState('');
     const [materialLink, setMaterialLink] = useState('');
@@ -453,11 +452,12 @@ export default function App() {
             setMaterialsError('Enter a title for this lecture material.');
             return;
         }
-        if (materialMode === 'file' && !selectedMaterialFile) {
-            setMaterialsError('Choose a PDF, PowerPoint, or Word file.');
+        const hasExternalLink = materialLink.trim() !== '';
+        if (!selectedMaterialFile && !hasExternalLink) {
+            setMaterialsError('Choose a document or add an online link. You can also provide both.');
             return;
         }
-        if (materialMode === 'link' && !/^https?:\/\//i.test(materialLink.trim())) {
+        if (hasExternalLink && !/^https?:\/\//i.test(materialLink.trim())) {
             setMaterialsError('Enter a valid link starting with https:// or http://.');
             return;
         }
@@ -465,8 +465,8 @@ export default function App() {
         setSavingMaterial(true);
 
         try {
-            if (materialMode === 'link') {
-                // Keep link sharing on the normal authenticated Axios API client.
+            if (!selectedMaterialFile) {
+                // Link-only materials continue to use the normal authenticated API client.
                 const response = await api.post('/teacher/materials', {
                     title: materialTitle.trim(),
                     description: materialDescription.trim(),
@@ -499,6 +499,7 @@ export default function App() {
                 const formData = new FormData();
                 formData.append('title', materialTitle.trim());
                 formData.append('description', materialDescription.trim());
+                if (hasExternalLink) formData.append('external_url', materialLink.trim());
                 formData.append('file', {
                     uri: selectedMaterialFile.uri,
                     name: safeName,
@@ -555,10 +556,12 @@ export default function App() {
         }
     };
 
-    const openMaterial = async (item) => {
-        const target = item.material_type === 'link' ? item.external_url : item.download_url;
+    const openMaterial = async (item, resourceType = 'file') => {
+        const target = resourceType === 'link' ? item.external_url : item.download_url;
         if (!target) {
-            setMaterialsError('This material does not have a valid file or link.');
+            setMaterialsError(resourceType === 'link'
+                ? 'This material does not have an external link.'
+                : 'This material does not have a downloadable document.');
             return;
         }
         try {
@@ -1501,7 +1504,7 @@ export default function App() {
         <>
             <SectionTitle
                 title={role === 'teacher' ? 'Lecture Materials' : 'Learning Materials'}
-                subtitle={role === 'teacher' ? 'Share notes, presentations, documents, or online resources with students.' : 'Study files and learning links shared by your teachers.'}
+                subtitle={role === 'teacher' ? 'Upload a document and optionally add a related online link for students.' : 'Study files and learning links shared by your teachers.'}
                 action={<Pressable onPress={() => loadMaterials(true)} style={styles.refreshButton}><Text style={styles.refreshText}>↻ Refresh</Text></Pressable>}
             />
 
@@ -1509,38 +1512,26 @@ export default function App() {
                 <View style={styles.card}>
                     <Text style={styles.formSectionTitle}>Share new material</Text>
                     <Text style={styles.cardSubtitle}>Students can access materials shared by teachers from their Materials tab.</Text>
-                    <View style={styles.materialModeRow}>
-                        <Pressable onPress={() => { setMaterialMode('file'); setMaterialsError(''); }} style={[styles.materialModeOption, materialMode === 'file' && styles.materialModeOptionActive]}>
-                            <Text style={[styles.materialModeText, materialMode === 'file' && styles.materialModeTextActive]}>Upload file</Text>
-                        </Pressable>
-                        <Pressable onPress={() => { setMaterialMode('link'); setMaterialsError(''); }} style={[styles.materialModeOption, materialMode === 'link' && styles.materialModeOptionActive]}>
-                            <Text style={[styles.materialModeText, materialMode === 'link' && styles.materialModeTextActive]}>Share link</Text>
-                        </Pressable>
-                    </View>
+
                     <Field label="Material title *" value={materialTitle} onChangeText={setMaterialTitle} placeholder="e.g. Week 01 - Introduction to Computing" autoCapitalize="sentences" />
                     <Field label="Description" value={materialDescription} onChangeText={setMaterialDescription} placeholder="Add a short note for students (optional)" multiline autoCapitalize="sentences" />
-                    {materialMode === 'file' ? (
-                        <>
-                            <Pressable onPress={chooseMaterialFile} style={styles.materialChooseFile}>
-                                <Text style={styles.materialChooseFileTitle}>{selectedMaterialFile ? 'Change selected file' : '＋ Choose a document'}</Text>
-                                <Text style={styles.materialChooseFileHint}>PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx) · up to 25 MB</Text>
-                            </Pressable>
-                            {!!selectedMaterialFile && <Text style={styles.materialSelectedFile}>Selected: {selectedMaterialFile.name}</Text>}
-                        </>
-                    ) : (
-                        <Field label="Google Drive / online link *" value={materialLink} onChangeText={setMaterialLink} placeholder="https://drive.google.com/..." keyboardType="url" autoCapitalize="none" helperText="Set the Google Drive sharing permission to allow your students to view the file." />
-                    )}
+                    <Pressable onPress={chooseMaterialFile} style={styles.materialChooseFile}>
+                        <Text style={styles.materialChooseFileTitle}>{selectedMaterialFile ? 'Change selected file' : '＋ Choose a document (optional)'}</Text>
+                        <Text style={styles.materialChooseFileHint}>PDF, Word (.doc/.docx), PowerPoint (.ppt/.pptx) · up to 25 MB</Text>
+                    </Pressable>
+                    {!!selectedMaterialFile && <Text style={styles.materialSelectedFile}>Selected: {selectedMaterialFile.name}</Text>}
+                    <Field label="Google Drive / online link (optional)" value={materialLink} onChangeText={setMaterialLink} placeholder="https://drive.google.com/..." keyboardType="url" autoCapitalize="none" helperText="Add a link to the same lesson or a related resource. Make sure students have permission to view it." />
                     {!!materialsError && <Notice text={materialsError} />}
                     <PrimaryButton title={savingMaterial ? 'Sharing…' : 'Share with students'} onPress={shareMaterial} loading={savingMaterial} disabled={savingMaterial} />
                 </View>
             )}
 
-            <SectionTitle title={role === 'teacher' ? 'Shared by me' : 'Available materials'} subtitle={role === 'teacher' ? 'Materials you have uploaded or linked.' : 'Open a file or follow a shared resource link.'} />
+            <SectionTitle title={role === 'teacher' ? 'Shared by me' : 'Available materials'} subtitle={role === 'teacher' ? 'Documents and optional links you have shared.' : 'Open a file or follow a shared resource link.'} />
             {!!materialsError && role === 'student' && <Notice text={materialsError} />}
             {materialsLoading ? (
                 <View style={styles.adminLoadingCard}><ActivityIndicator color={COLORS.blue} /><Text style={styles.loadingBarText}>Loading lecture materials…</Text></View>
             ) : materials.length === 0 ? (
-                <EmptyState title="No lecture materials yet" body={role === 'teacher' ? 'Upload a document or share a Google Drive link to make learning materials available to students.' : 'Your teachers have not shared any learning materials yet.'} />
+                <EmptyState title="No lecture materials yet" body={role === 'teacher' ? 'Upload a document, add an optional link, or share just a link with students.' : 'Your teachers have not shared any learning materials yet.'} />
             ) : materials.map((item) => (
                 <View key={String(item.id)} style={styles.card}>
                     <View style={styles.cardTopRow}>
@@ -1549,15 +1540,28 @@ export default function App() {
                             <Text style={styles.cardSubtitle}>{item.teacher_name || (role === 'teacher' ? 'You shared this material' : 'Teacher shared material')}</Text>
                         </View>
                         <View style={styles.materialTypePill}>
-                            <Text style={styles.materialTypePillText}>{item.material_type === 'link' ? 'LINK' : String(item.original_filename || 'FILE').split('.').pop().toUpperCase()}</Text>
+                            <Text style={styles.materialTypePillText}>
+                                {item.download_url && item.external_url
+                                    ? `${String(item.original_filename || 'FILE').split('.').pop().toUpperCase()} + LINK`
+                                    : item.download_url
+                                        ? String(item.original_filename || 'FILE').split('.').pop().toUpperCase()
+                                        : 'LINK'}
+                            </Text>
                         </View>
                     </View>
                     {!!item.description && <Text style={styles.cardDescription}>{item.description}</Text>}
                     {!!item.original_filename && <Text style={styles.materialMetaText}>📄 {item.original_filename}</Text>}
                     <View style={styles.materialActions}>
-                        <Pressable onPress={() => openMaterial(item)} style={styles.materialOpenButton}>
-                            <Text style={styles.materialOpenButtonText}>{item.material_type === 'link' ? 'Open shared link ↗' : 'Download / Open ↓'}</Text>
-                        </Pressable>
+                        {!!item.download_url && (
+                            <Pressable onPress={() => openMaterial(item, 'file')} style={styles.materialOpenButton}>
+                                <Text style={styles.materialOpenButtonText}>Download file ↓</Text>
+                            </Pressable>
+                        )}
+                        {!!item.external_url && (
+                            <Pressable onPress={() => openMaterial(item, 'link')} style={styles.materialOpenButton}>
+                                <Text style={styles.materialOpenButtonText}>Open link ↗</Text>
+                            </Pressable>
+                        )}
                         {role === 'teacher' && (
                             <Pressable onPress={() => deleteMaterial(item)} style={styles.materialDeleteButton}>
                                 <Text style={styles.materialDeleteButtonText}>Delete</Text>

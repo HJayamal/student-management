@@ -1287,22 +1287,23 @@ function StudentApp() {
                         {!loadingMaterials && !materialsError && materials.length > 0 && (
                             <div className="student-materials-grid">
                                 {materials.map((item) => {
-                                    const isLink = item.material_type === "link";
+                                    const hasFile = Boolean(item.download_url);
+                                    const hasLink = Boolean(item.external_url);
                                     const fileName = item.original_filename || "Lecture document";
                                     const fileExtension = fileName.includes(".")
                                         ? fileName.split(".").pop().toUpperCase()
                                         : "FILE";
-                                    const destination = isLink ? item.external_url : item.download_url;
 
                                     return (
                                         <article className="student-material-card" key={item.id}>
                                             <div className="student-material-card-top">
                                                 <div className="student-material-file-icon" aria-hidden="true">
-                                                    {isLink ? "↗" : "▤"}
+                                                    {hasFile ? "▤" : "↗"}
                                                 </div>
-                                                <span className={`student-material-type ${isLink ? "link" : "file"}`}>
-                                                    {isLink ? "LINK" : fileExtension}
-                                                </span>
+                                                <div className="student-material-type-list">
+                                                    {hasFile ? <span className="student-material-type file">{fileExtension}</span> : null}
+                                                    {hasLink ? <span className="student-material-type link">LINK</span> : null}
+                                                </div>
                                             </div>
                                             <h3>{item.title || "Learning material"}</h3>
                                             <p className="student-material-teacher">
@@ -1311,7 +1312,7 @@ function StudentApp() {
                                             {item.description && (
                                                 <p className="student-material-description">{item.description}</p>
                                             )}
-                                            {!isLink && (
+                                            {hasFile && (
                                                 <p className="student-material-filename">📄 {fileName}</p>
                                             )}
                                             <div className="student-material-card-footer">
@@ -1320,18 +1321,31 @@ function StudentApp() {
                                                         ? new Date(String(item.created_at).replace(" ", "T")).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })
                                                         : "Shared material"}
                                                 </span>
-                                                {destination ? (
-                                                    <a
-                                                        className="student-material-open-button"
-                                                        href={destination}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
-                                                    >
-                                                        {isLink ? "Open link ↗" : "Download file ↓"}
-                                                    </a>
-                                                ) : (
-                                                    <span className="student-material-unavailable">Link unavailable</span>
-                                                )}
+                                                <div className="student-material-actions">
+                                                    {hasFile ? (
+                                                        <a
+                                                            className="student-material-open-button"
+                                                            href={item.download_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                        >
+                                                            Download file ↓
+                                                        </a>
+                                                    ) : null}
+                                                    {hasLink ? (
+                                                        <a
+                                                            className="student-material-open-button student-material-link-button"
+                                                            href={item.external_url}
+                                                            target="_blank"
+                                                            rel="noopener noreferrer"
+                                                        >
+                                                            Open link ↗
+                                                        </a>
+                                                    ) : null}
+                                                    {!hasFile && !hasLink ? (
+                                                        <span className="student-material-unavailable">Resource unavailable</span>
+                                                    ) : null}
+                                                </div>
                                             </div>
                                         </article>
                                     );

@@ -38,7 +38,7 @@ class LectureMaterialController extends Controller
             'mime_type' => $material->mime_type,
             'file_size' => $material->file_size,
             'external_url' => $material->external_url,
-            'download_url' => $material->material_type === 'file'
+            'download_url' => $material->file_path
                 ? URL::temporarySignedRoute(
                     'lecture-materials.download',
                     now()->addHours(12),
@@ -91,9 +91,11 @@ class LectureMaterialController extends Controller
         $file = $request->file('file');
         $externalUrl = trim((string) ($validated['external_url'] ?? ''));
 
-        if (($file && $externalUrl !== '') || (!$file && $externalUrl === '')) {
+        // A lecture material must contain at least one resource. A document
+        // and an optional external link can be stored on the same record.
+        if (!$file && $externalUrl === '') {
             return response()->json([
-                'message' => 'Choose either one document file or one external link.',
+                'message' => 'Choose a document file, add an external link, or provide both.',
             ], 422);
         }
 
@@ -112,7 +114,9 @@ class LectureMaterialController extends Controller
             $data['original_filename'] = $file->getClientOriginalName();
             $data['mime_type'] = $file->getMimeType() ?: $file->getClientMimeType();
             $data['file_size'] = $file->getSize();
-        } else {
+        }
+
+        if ($externalUrl !== '') {
             $data['external_url'] = $externalUrl;
         }
 
@@ -140,7 +144,7 @@ class LectureMaterialController extends Controller
 
     public function download(LectureMaterial $material)
     {
-        abort_unless($material->material_type === 'file' && $material->file_path, 404);
+        abort_unless($material->file_path, 404);
         abort_unless(Storage::disk('local')->exists($material->file_path), 404, 'The material file could not be found.');
 
         return Storage::disk('local')->download(

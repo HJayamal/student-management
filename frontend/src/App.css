@@ -3139,3 +3139,18 @@ textarea {
     }
 }
 
+
+
+/* One lecture material can include both a stored document and an online link. */
+.materials-type-pills {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px;
+}
+
+.materials-link-button {
+    border-color: #c9f0dc;
+    color: #13865e;
+    background: #e9fbf1;
+}

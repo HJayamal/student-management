@@ -543,3 +543,21 @@ button.student-nav-item:focus-visible {
     .student-materials-grid { grid-template-columns: 1fr; }
     .student-material-card-footer { align-items: flex-start; flex-direction: column; }
 }
+
+
+.student-material-type-list {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px;
+}
+.student-material-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.student-material-link-button {
+    color: #147a57;
+    background: linear-gradient(110deg, #dff8eb, #e9fbf1);
+}

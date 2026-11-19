@@ -119,7 +119,6 @@ function App() {
     const [materials, setMaterials] = useState([]);
     const [materialsLoading, setMaterialsLoading] = useState(false);
     const [materialsError, setMaterialsError] = useState("");
-    const [materialMode, setMaterialMode] = useState("file");
     const [materialTitle, setMaterialTitle] = useState("");
     const [materialDescription, setMaterialDescription] = useState("");
     const [materialLink, setMaterialLink] = useState("");
@@ -613,12 +612,14 @@ function App() {
             return;
         }
 
-        if (materialMode === "file" && !selectedMaterialFile) {
-            setMaterialsError("Choose a PDF, Word, or PowerPoint document.");
+        const hasExternalLink = materialLink.trim() !== "";
+
+        if (!selectedMaterialFile && !hasExternalLink) {
+            setMaterialsError("Choose a document or add an online link. You can also provide both.");
             return;
         }
 
-        if (materialMode === "file" && selectedMaterialFile) {
+        if (selectedMaterialFile) {
             const allowedExtensions = ["pdf", "doc", "docx", "ppt", "pptx"];
             const extension = selectedMaterialFile.name.split(".").pop()?.toLowerCase();
 
@@ -633,7 +634,7 @@ function App() {
             }
         }
 
-        if (materialMode === "link" && !/^https?:\/\//i.test(materialLink.trim())) {
+        if (hasExternalLink && !/^https?:\/\//i.test(materialLink.trim())) {
             setMaterialsError("Enter a valid link starting with https:// or http://.");
             return;
         }
@@ -643,13 +644,15 @@ function App() {
         try {
             let response;
 
-            if (materialMode === "file") {
+            if (selectedMaterialFile) {
                 const formData = new FormData();
                 formData.append("title", materialTitle.trim());
                 formData.append("description", materialDescription.trim());
                 formData.append("file", selectedMaterialFile);
+                if (hasExternalLink) formData.append("external_url", materialLink.trim());
 
-                // Do not manually set the multipart boundary; the browser/Axios adds it.
+                // Match the portal's existing Axios multipart upload configuration.
+                // The browser/Axios supplies the multipart boundary.
                 response = await api.post("/teacher/materials", formData, {
                     headers: { Accept: "application/json", "Content-Type": "multipart/form-data" },
                 });
@@ -705,13 +708,15 @@ function App() {
         }
     };
 
-    const handleOpenMaterial = (material) => {
-        const target = material.material_type === "link"
+    const handleOpenMaterial = (material, resourceType = "file") => {
+        const target = resourceType === "link"
             ? material.external_url
             : material.download_url;
 
         if (!target) {
-            setMaterialsError("This material does not have an available link.");
+            setMaterialsError(resourceType === "link"
+                ? "This material does not have an external link."
+                : "This material does not have a downloadable document.");
             return;
         }
 
@@ -1117,29 +1122,6 @@ function App() {
                             </div>
 
                             <form className="materials-form" onSubmit={handleShareMaterial}>
-                                <div className="materials-mode-switch" role="group" aria-label="Material type">
-                                    <button
-                                        type="button"
-                                        className={`materials-mode-button ${materialMode === "file" ? "active" : ""}`}
-                                        onClick={() => {
-                                            setMaterialMode("file");
-                                            setMaterialsError("");
-                                        }}
-                                    >
-                                        <span>↑</span> Upload a file
-                                    </button>
-                                    <button
-                                        type="button"
-                                        className={`materials-mode-button ${materialMode === "link" ? "active" : ""}`}
-                                        onClick={() => {
-                                            setMaterialMode("link");
-                                            setMaterialsError("");
-                                        }}
-                                    >
-                                        <span>↗</span> Share a link
-                                    </button>
-                                </div>
-
                                 <div className="materials-field">
                                     <label htmlFor="material-title">Material title *</label>
                                     <input
@@ -1165,46 +1147,43 @@ function App() {
                                     />
                                 </div>
 
-                                {materialMode === "file" ? (
-                                    <div className="materials-field">
-                                        <label htmlFor="material-file">Lecture document *</label>
-                                        <input
-                                            key={materialFileInputKey}
-                                            id="material-file"
-                                            className="materials-file-input"
-                                            type="file"
-                                            accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
-                                            onChange={(event) => {
-                                                setSelectedMaterialFile(event.target.files?.[0] || null);
-                                                setMaterialsError("");
-                                            }}
-                                        />
-                                        <p className="materials-help-text">PDF, Word (DOC/DOCX), or PowerPoint (PPT/PPTX). Maximum file size: 25 MB.</p>
-                                        {selectedMaterialFile && (
-                                            <div className="materials-selected-file">
-                                                <span className="materials-file-symbol">PDF</span>
-                                                <div>
-                                                    <strong>{selectedMaterialFile.name}</strong>
-                                                    <span>{formatMaterialFileSize(selectedMaterialFile.size)}</span>
-                                                </div>
+                                <div className="materials-field">
+                                    <label htmlFor="material-file">Lecture document <span>(optional)</span></label>
+                                    <input
+                                        key={materialFileInputKey}
+                                        id="material-file"
+                                        className="materials-file-input"
+                                        type="file"
+                                        accept=".pdf,.doc,.docx,.ppt,.pptx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
+                                        onChange={(event) => {
+                                            setSelectedMaterialFile(event.target.files?.[0] || null);
+                                            setMaterialsError("");
+                                        }}
+                                    />
+                                    <p className="materials-help-text">PDF, Word (DOC/DOCX), or PowerPoint (PPT/PPTX). Maximum file size: 25 MB.</p>
+                                    {selectedMaterialFile && (
+                                        <div className="materials-selected-file">
+                                            <span className="materials-file-symbol">FILE</span>
+                                            <div>
+                                                <strong>{selectedMaterialFile.name}</strong>
+                                                <span>{formatMaterialFileSize(selectedMaterialFile.size)}</span>
                                             </div>
-                                        )}
-                                    </div>
-                                ) : (
-                                    <div className="materials-field">
-                                        <label htmlFor="material-link">Google Drive / online link *</label>
-                                        <input
-                                            id="material-link"
-                                            type="url"
-                                            value={materialLink}
-                                            onChange={(event) => setMaterialLink(event.target.value)}
-                                            placeholder="https://drive.google.com/..."
-                                            autoComplete="url"
-                                            required
-                                        />
-                                        <p className="materials-help-text">Set the Google Drive sharing permission so your students can view the file.</p>
-                                    </div>
-                                )}
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="materials-field">
+                                    <label htmlFor="material-link">Google Drive / online link <span>(optional)</span></label>
+                                    <input
+                                        id="material-link"
+                                        type="url"
+                                        value={materialLink}
+                                        onChange={(event) => setMaterialLink(event.target.value)}
+                                        placeholder="https://drive.google.com/..."
+                                        autoComplete="url"
+                                    />
+                                    <p className="materials-help-text">Add a link to the same lesson document or a related resource. Set Google Drive access so your students can view it.</p>
+                                </div>
 
                                 {materialsError && (
                                     <div className="materials-feedback materials-feedback-error" role="alert">
@@ -1256,25 +1235,36 @@ function App() {
                                                     <h3>{material.title}</h3>
                                                     <p>{material.description || "No description provided."}</p>
                                                     <div className="materials-item-meta">
-                                                        <span>{material.material_type === "link" ? "Online link" : (material.original_filename || "Uploaded file")}</span>
-                                                        {material.material_type === "file" && material.file_size ? (
-                                                            <span>{formatMaterialFileSize(material.file_size)}</span>
-                                                        ) : null}
+                                                        {material.original_filename ? <span>{material.original_filename}</span> : null}
+                                                        {material.file_size ? <span>{formatMaterialFileSize(material.file_size)}</span> : null}
+                                                        {material.external_url ? <span>Online link attached</span> : null}
                                                         {material.created_at ? <span>{formatMaterialDateTime(material.created_at)}</span> : null}
                                                     </div>
                                                 </div>
-                                                <span className={`materials-type-pill ${material.material_type === "link" ? "link" : "file"}`}>
-                                                    {material.material_type === "link" ? "LINK" : "FILE"}
-                                                </span>
+                                                <div className="materials-type-pills">
+                                                    {material.download_url ? <span className="materials-type-pill file">FILE</span> : null}
+                                                    {material.external_url ? <span className="materials-type-pill link">LINK</span> : null}
+                                                </div>
                                             </div>
                                             <div className="materials-item-actions">
-                                                <button
-                                                    type="button"
-                                                    className="materials-open-button"
-                                                    onClick={() => handleOpenMaterial(material)}
-                                                >
-                                                    {material.material_type === "link" ? "Open shared link ↗" : "Download / Open ↓"}
-                                                </button>
+                                                {material.download_url ? (
+                                                    <button
+                                                        type="button"
+                                                        className="materials-open-button"
+                                                        onClick={() => handleOpenMaterial(material, "file")}
+                                                    >
+                                                        Download document ↓
+                                                    </button>
+                                                ) : null}
+                                                {material.external_url ? (
+                                                    <button
+                                                        type="button"
+                                                        className="materials-open-button materials-link-button"
+                                                        onClick={() => handleOpenMaterial(material, "link")}
+                                                    >
+                                                        Open shared link ↗
+                                                    </button>
+                                                ) : null}
                                                 <button
                                                     type="button"
                                                     className="materials-delete-button"
